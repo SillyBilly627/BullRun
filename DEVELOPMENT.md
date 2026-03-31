@@ -143,40 +143,59 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 - [x] **Educational tips** — 12 rotating stock market tips shown contextually
 - [ ] **Weekly reset** — scheduled job to reset all player money to $10,000 and stock prices to base (needs Cloudflare Cron Trigger or manual admin action)
 
-### Phase 3 — Competitive & Social (Priority: MEDIUM)
-- [ ] **Closed Stockmarketing lobbies** — create/join lobbies with configurable settings (time limit, tick speed, player count, lock, reward type)
-- [ ] **Lobby waiting room** — shows players, levels, money before match starts
-- [ ] **Lobby match gameplay** — separate stock set (5-8 random names), faster ticks, in-match leaderboard, countdown timer
-- [ ] **Post-game score page** — rankings, stats, rewards, XP earned
-- [ ] **Reward systems** — money pool and percentage-based rewards
-- [ ] **Global chat** — collapsible chat panel, messages show username + level, admin can enable/disable/clear/ban
-- [ ] **Leveling milestones** — unlock cosmetics at certain levels
+### Phase 3 — Competitive & Social (Priority: HIGH — build next)
+
+**Closed Stockmarketing (Lobby Mode):**
+- [ ] **Lobby creation** — player creates a lobby with settings: time limit (10 min to 1 hour), max players, lock toggle (prevent randoms joining), tick speed (3-10 seconds), reward type (money pool OR percentage-based)
+- [ ] **Lobby waiting room** — shows all joined players with their levels, Open mode money, and leaderboard positions. Creator can start the match.
+- [ ] **Lobby match gameplay** — 5-8 stocks with randomly generated company names per match. Faster ticks (3-10 sec based on settings). Each player starts with $10,000 match money. Separate portfolio/transactions from Open mode.
+- [ ] **In-match UI** — small leaderboard showing live player rankings, countdown timer, portfolio view, buy/sell interface
+- [ ] **Post-game score page** — final rankings, shares bought/sold per player, profit/loss, times sold under buy price, reward amount won, XP earned
+- [ ] **Reward system (money pool)** — all players put in a set entry fee on join. Winners take portions of the pool. Rewards go to Open mode balance.
+- [ ] **Reward system (percentage)** — 1st/2nd/3rd win a percentage of their existing Open mode balance
+- [ ] **XP from lobbies** — XP for participation + bonus XP based on placement
+
+**Global Chat:**
+- [ ] **Chat panel** — collapsible sidebar or bottom panel visible on all pages, messages show username + level
+- [ ] **Admin controls** — admin can enable/disable chat globally, clear history, ban individual players from chat (without banning from game)
+- [ ] **Simple design** — one global room, no private messaging
+
+**Leveling:**
+- [ ] **Leveling milestones** — unlock cosmetic items at certain levels (ties into Phase 4 battle pass)
+
+**NOTE:** Database tables for lobbies and chat already exist in `migrations/0001_initial.sql`:
+- `lobbies` — lobby settings (status, max_players, time_limit, tick_speed, is_locked, reward_type, pool_entry_fee, reward_percentage)
+- `lobby_players` — players in each lobby (money, final_money, placement, reward_earned, xp_earned)
+- `lobby_stocks` — stocks generated per match (symbol, name, price, volatility, buy_pressure)
+- `lobby_portfolios` — holdings within a match
+- `lobby_transactions` — trade log for matches
+- `chat_messages` — global chat (user_id, message, created_at)
+- `game_config` has `chat_enabled` key (default '1')
 
 ### Phase 4 — Polish & Extras (Priority: LOW)
-- [ ] **Cosmetics system** — titles, profile backgrounds, leaderboard card styles
-- [ ] **Battle pass** — progression track tied to leveling, unlocks cosmetics
-- [ ] **Crate spin** — post-lobby-win reward spin for cosmetics not in battle pass
-- [ ] **Cosmetics page** — preview and equip cosmetics
-- [ ] **Admin panel** — hidden button + admin password, view/ban players/IPs, manipulate stocks/levels/money/cosmetics, manage announcements, toggle chat, force-close lobbies
-- [ ] **Public announcements** — admin creates, players see as non-obtrusive banners (backend exists, admin UI doesn't)
-- [ ] **Educational features** — tooltips throughout the app, glossary page, contextual hints, post-trade summaries (basic tips exist, needs expansion)
+- [ ] **Cosmetics system** — titles, profile backgrounds, leaderboard card styles, visual effects. Items stored in `cosmetics` table, ownership in `user_cosmetics` table. Users equip via `equipped_title`, `equipped_background`, `equipped_card_style` fields on users table.
+- [ ] **Battle pass** — progression track tied to leveling. As players level up, they unlock cosmetic items from a predefined list. Uses `battlepass_level` field in `cosmetics` table.
+- [ ] **Crate spin** — after winning Closed mode matches, players get a crate spin from a separate pool of cosmetics NOT in the battle pass. Higher placement = better chances at rare items. Uses `source` field ('battlepass' vs 'crate') in `cosmetics` table. Rarities: common, uncommon, rare, epic, legendary.
+- [ ] **Cosmetics page** — dedicated page for previewing and equipping cosmetics before applying them
+- [ ] **Admin panel** — hidden/secret button + admin password (stored in `game_config` table, default 'BullRun2026!'). Features: view all connected players and IPs, ban accounts/IPs (uses `bans` table), push announcements, manipulate stock prices/player levels/money/cosmetics, view and force-close active lobbies, enable/disable global chat, clear chat history, ban players from chat individually
+- [ ] **Educational features** — tooltips throughout the app explaining stock concepts, glossary page with trading terminology, contextual hints (e.g., "In real life, this is called a market order"), post-trade summaries explaining real-world equivalents
 - [ ] **Security review** — rate limiting, input validation audit, XSS prevention audit
-- [ ] **Native Swift wrapper apps** — macOS + iOS/iPadOS (stretch goal, only if time allows)
+- [ ] **Native Swift wrapper apps** — macOS + iOS/iPadOS using WKWebView in SwiftUI (stretch goal, only if time allows)
 
 ---
 
 ## How to Continue Development
 
 1. Read this file to understand what exists
-2. Read the master prompt (the original project brief) in the conversation history for full requirements
-3. Pick up from the next uncompleted phase
-4. After making changes, commit with a descriptive message and update the checklist above
-5. Keep the same patterns: all API routes in the single `[[path]].js` file, vanilla JS frontend modules, dark theme CSS variables
+2. Pick up from the next uncompleted phase (Phase 3)
+3. After making changes, commit with a descriptive message and update the checklist above
+4. Keep the same patterns: all API routes in the single `[[path]].js` file, vanilla JS frontend modules, dark theme CSS variables
+5. **The original master prompt/project brief is NOT available in new sessions** — all requirements are documented in this file. If something is ambiguous, ask Xavier.
 
 ### Key files to modify per phase:
 - **New API routes:** Add to `functions/api/[[path]].js`
 - **New pages/UI:** Add HTML to `public/index.html`, styles to `public/css/style.css`, logic to `public/js/app.js`
-- **New database tables:** Create a new migration file `migrations/0002_*.sql`
+- **New database tables:** Create a new migration file `migrations/0003_*.sql` (next number in sequence)
 - **Configuration:** `wrangler.toml` for Cloudflare bindings
 
 ### Local development:
@@ -231,12 +250,39 @@ This ensures the tables are always in the same database file the dev server uses
 
 ## Important Notes for AI Assistants
 
+### About Xavier
 - Xavier is NOT a coder. Write all code yourself. Give complete files, not snippets.
 - Keep code simple with comments. No complex frameworks.
 - Build incrementally — make it work, then layer on features.
-- The game may run on a school network — security matters.
-- Must stay on Cloudflare free tier ($5/month max if absolutely needed).
-- The frontend is a single-page app — all pages are divs inside `index.html` that get shown/hidden.
-- The backend is a single catch-all function — route matching is done with string comparison inside the `onRequest` handler.
+- Give him exact terminal commands to run. Don't assume he knows git/npm.
+- When something breaks, ask for terminal output or screenshots to debug.
+
+### Code Patterns (must follow for consistency)
+- The frontend is a single-page app — all pages are divs inside `index.html` that get shown/hidden via `App.navigate()`.
+- The backend is a single catch-all function — route matching is done with string comparison inside the `onRequest` handler in `functions/api/[[path]].js`.
 - Use CSS variables defined in `:root` for all colors/sizing.
 - The app uses vanilla JS module pattern: `const ModuleName = (() => { ... return { publicMethods }; })();`
+- All API calls go through the `API` module in `api.js` which adds Bearer token auth headers.
+- New database migrations go in `migrations/` as numbered SQL files (e.g., `0003_*.sql`). The `setup.sh` script auto-runs all `migrations/*.sql` files in order.
+- Toast notifications: `showToast(message, type, tip)` where type is 'success', 'error', or 'info'.
+
+### Hosting Constraints
+- Must stay on Cloudflare free tier ($5/month max if absolutely needed).
+- The game may run on a school network — only ports 80 and 443 are open.
+- School network has SSL interception — `npm config set strict-ssl false` is needed.
+- No Durable Objects (paid tier) — use polling instead of WebSockets for real-time updates.
+
+### GitHub Workflow
+- Repo: `https://github.com/SillyBilly627/BullRun`
+- Xavier will need to provide a GitHub Personal Access Token (fine-grained, with Contents read+write permission on the BullRun repo) for pushing.
+- Push with: `git remote set-url origin https://SillyBilly627:TOKEN@github.com/SillyBilly627/BullRun.git`
+- Always commit with descriptive messages explaining what changed and why.
+- Always update DEVELOPMENT.md after completing features.
+- The `setup.sh` file gets modified locally by `chmod +x` — Xavier must run `git checkout -- setup.sh` before `git pull`.
+
+### Lobby Tick System (for Phase 3)
+- Lobby matches need their own tick system separate from the Open market's lazy ticks.
+- Open market ticks every 30 seconds. Lobby ticks are faster (3-10 seconds configurable).
+- Since we can't use Durable Objects, lobby ticks should use the same lazy evaluation pattern: frontend polls for updates, backend ticks if enough time has passed.
+- Lobby stocks use `lobby_stocks` table (separate from main `stocks` table).
+- Random company name generation needed for lobby stocks (e.g., "NovaCrest Holdings", "BlueArc Systems").
