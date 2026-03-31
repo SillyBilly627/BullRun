@@ -1029,6 +1029,7 @@ const Lobby = (() => {
   let matchChartType = 'line';   // 'line' or 'candle' for inline stock cards
   let matchTimerInterval = null; // Client-side 1-second timer
   let matchTimeLeft = 0;         // Seconds remaining (synced from server, decremented locally)
+  let matchPolling = false;      // Guard against overlapping poll requests
 
   // --- MAIN LOAD: checks if user is already in a lobby ---
   async function load() {
@@ -1368,44 +1369,55 @@ const Lobby = (() => {
   }
 
   async function refreshMatch(lobbyId) {
-    // Fetch tick data and portfolio in PARALLEL (faster)
-    const [tickRes, pfRes] = await Promise.all([
-      API.lobbyTick(lobbyId),
-      API.getLobbyPortfolio(lobbyId),
-    ]);
+    // Guard against overlapping poll requests
+    if (matchPolling) return;
+    matchPolling = true;
 
-    if (!tickRes.ok) {
-      if (tickRes.data.error === 'Lobby is not active') {
+    try {
+      // Fetch tick data and portfolio in PARALLEL (faster)
+      const [tickRes, pfRes] = await Promise.all([
+        API.lobbyTick(lobbyId),
+        API.getLobbyPortfolio(lobbyId),
+      ]);
+
+      if (!tickRes.ok) {
+        if (tickRes.data.error === 'Lobby is not active') {
+          stopAllPolling();
+          showResults(lobbyId);
+        }
+        return;
+      }
+
+      if (tickRes.data.matchEnded) {
         stopAllPolling();
         showResults(lobbyId);
+        return;
       }
-      return;
-    }
 
-    if (tickRes.data.matchEnded) {
-      stopAllPolling();
-      showResults(lobbyId);
-      return;
-    }
+      const { prices, rankings, timeRemaining } = tickRes.data;
 
-    const { prices, rankings, timeRemaining, ticked } = tickRes.data;
+      // Sync client-side timer from server (prevents drift)
+      matchTimeLeft = timeRemaining;
+      renderTimer();
 
-    // Sync client-side timer from server (prevents drift)
-    matchTimeLeft = timeRemaining;
-    renderTimer();
-
-    // Append new OHLCV data if a tick happened
-    if (ticked) {
+      // Append new OHLCV data if price has CHANGED since last recorded point.
+      // This fixes the multi-tab bug: only one tab gets ticked=true, but both
+      // tabs see the new current_price. By comparing to the last stored close,
+      // both tabs append the new data point.
       prices.forEach(s => {
         if (!stockHistories[s.id]) stockHistories[s.id] = [];
-        const open = s.previous_price || s.current_price;
-        const close = s.current_price;
-        const high = Math.max(open, close) * (1 + Math.random() * 0.003);
-        const low = Math.min(open, close) * (1 - Math.random() * 0.003);
-        stockHistories[s.id].push({ open, high, low, close });
-        if (stockHistories[s.id].length > 120) stockHistories[s.id].shift();
+        const hist = stockHistories[s.id];
+        const lastClose = hist.length > 0 ? hist[hist.length - 1].close : null;
+        // Append if this is a new price we haven't recorded yet
+        if (lastClose === null || lastClose !== s.current_price) {
+          const open = s.previous_price || s.current_price;
+          const close = s.current_price;
+          const high = Math.max(open, close) * (1 + Math.random() * 0.003);
+          const low = Math.min(open, close) * (1 - Math.random() * 0.003);
+          hist.push({ open, high, low, close });
+          if (hist.length > 120) hist.shift();
+        }
       });
-    }
 
     // Render stock cards grid
     const gridEl = document.getElementById('match-stocks-grid');
@@ -1487,6 +1499,9 @@ const Lobby = (() => {
         const sellBtn = document.getElementById('match-sell-btn');
         if (sellBtn) sellBtn.disabled = !held || held.shares <= 0;
       }
+    }
+    } finally {
+      matchPolling = false;
     }
   }
 
@@ -1894,6 +1909,7 @@ const Lobby = (() => {
     if (matchPollInterval) { clearInterval(matchPollInterval); matchPollInterval = null; }
     if (waitingPollInterval) { clearInterval(waitingPollInterval); waitingPollInterval = null; }
     if (matchTimerInterval) { clearInterval(matchTimerInterval); matchTimerInterval = null; }
+    matchPolling = false;
   }
 
   return {
