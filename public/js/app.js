@@ -1025,7 +1025,10 @@ const Lobby = (() => {
   let selectedTradeStock = null; // Currently selected stock for trading in match
   let lobbyChartType = 'line';   // Chart type for lobby stock modal
   let lobbyDetailHistory = [];   // Stored history for chart redraws
-  let stockHistories = {};       // { stockId: [price, price, ...] } for live inline charts
+  let stockHistories = {};       // { stockId: [{open,high,low,close}, ...] } for live inline charts
+  let matchChartType = 'line';   // 'line' or 'candle' for inline stock cards
+  let matchTimerInterval = null; // Client-side 1-second timer
+  let matchTimeLeft = 0;         // Seconds remaining (synced from server, decremented locally)
 
   // --- MAIN LOAD: checks if user is already in a lobby ---
   async function load() {
@@ -1299,6 +1302,7 @@ const Lobby = (() => {
     stopAllPolling();
     selectedTradeStock = null;
     stockHistories = {};
+    matchChartType = 'line';
 
     // Get lobby details for name
     const detailRes = await API.getLobbyDetails(lobbyId);
@@ -1306,23 +1310,70 @@ const Lobby = (() => {
       document.getElementById('match-lobby-name').textContent = detailRes.data.lobby.name;
     }
 
-    // Fetch initial price histories for all stocks (so charts aren't empty)
+    // Fetch initial price histories for all stocks (full OHLCV for candlestick support)
     const histRes = await API.getAllLobbyHistory(lobbyId);
     if (histRes.ok && histRes.data.histories) {
       for (const [stockId, hist] of Object.entries(histRes.data.histories)) {
-        stockHistories[stockId] = hist.map(h => h.close_price || h.price);
+        stockHistories[stockId] = hist.map(h => ({
+          open: h.open_price || h.price,
+          high: h.high_price || h.price,
+          low: h.low_price || h.price,
+          close: h.close_price || h.price,
+        }));
       }
     }
 
     // Initial tick + render
     await refreshMatch(lobbyId);
 
-    // Poll every 2 seconds for match updates
+    // Start client-side timer (smooth 1-second countdown)
+    matchTimerInterval = setInterval(() => {
+      if (matchTimeLeft > 0) {
+        matchTimeLeft--;
+        renderTimer();
+      }
+    }, 1000);
+
+    // Poll server every 2 seconds for price/ranking updates
     matchPollInterval = setInterval(() => refreshMatch(lobbyId), 2000);
   }
 
+  // Render the countdown timer from local state
+  function renderTimer() {
+    const mins = Math.floor(matchTimeLeft / 60);
+    const secs = matchTimeLeft % 60;
+    document.getElementById('match-timer-text').textContent =
+      `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    document.getElementById('match-timer').classList.toggle('urgent', matchTimeLeft < 30);
+  }
+
+  // Toggle inline chart type (line / candle)
+  function toggleMatchChartType() {
+    matchChartType = matchChartType === 'line' ? 'candle' : 'line';
+    // Update button text
+    const btn = document.getElementById('match-chart-toggle');
+    if (btn) btn.textContent = matchChartType === 'line' ? '📊 Candles' : '📈 Line';
+    // Redraw all charts immediately
+    redrawAllCharts();
+  }
+
+  function redrawAllCharts() {
+    requestAnimationFrame(() => {
+      for (const [stockId, data] of Object.entries(stockHistories)) {
+        if (data.length > 1) {
+          drawMatchChart(`match-chart-${stockId}`, data, matchChartType);
+        }
+      }
+    });
+  }
+
   async function refreshMatch(lobbyId) {
-    const tickRes = await API.lobbyTick(lobbyId);
+    // Fetch tick data and portfolio in PARALLEL (faster)
+    const [tickRes, pfRes] = await Promise.all([
+      API.lobbyTick(lobbyId),
+      API.getLobbyPortfolio(lobbyId),
+    ]);
+
     if (!tickRes.ok) {
       if (tickRes.data.error === 'Lobby is not active') {
         stopAllPolling();
@@ -1339,20 +1390,19 @@ const Lobby = (() => {
 
     const { prices, rankings, timeRemaining, ticked } = tickRes.data;
 
-    // Update timer
-    const mins = Math.floor(timeRemaining / 60);
-    const secs = timeRemaining % 60;
-    const timerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    document.getElementById('match-timer-text').textContent = timerText;
-    const timerEl = document.getElementById('match-timer');
-    timerEl.classList.toggle('urgent', timeRemaining < 30);
+    // Sync client-side timer from server (prevents drift)
+    matchTimeLeft = timeRemaining;
+    renderTimer();
 
-    // Append new prices to history if a tick happened
+    // Append new OHLCV data if a tick happened
     if (ticked) {
       prices.forEach(s => {
         if (!stockHistories[s.id]) stockHistories[s.id] = [];
-        stockHistories[s.id].push(s.current_price);
-        // Keep last 120 points max
+        const open = s.previous_price || s.current_price;
+        const close = s.current_price;
+        const high = Math.max(open, close) * (1 + Math.random() * 0.003);
+        const low = Math.min(open, close) * (1 - Math.random() * 0.003);
+        stockHistories[s.id].push({ open, high, low, close });
         if (stockHistories[s.id].length > 120) stockHistories[s.id].shift();
       });
     }
@@ -1384,22 +1434,16 @@ const Lobby = (() => {
       `;
     }).join('');
 
-    // Draw charts on each card after HTML is rendered
-    requestAnimationFrame(() => {
-      prices.forEach(s => {
-        const data = stockHistories[s.id] || [];
-        if (data.length > 1) {
-          drawMatchChart(`match-chart-${s.id}`, data);
-        }
-      });
-    });
+    // Draw charts after HTML renders (only needed because we rebuild DOM)
+    redrawAllCharts();
 
     // Update selected trade stock price if open
     if (selectedTradeStock) {
       const updated = prices.find(p => p.id === selectedTradeStock.id);
       if (updated) {
         selectedTradeStock.current_price = updated.current_price;
-        document.getElementById('match-trade-price').textContent = formatMoney(updated.current_price);
+        const tradePrice = document.getElementById('match-trade-price');
+        if (tradePrice) tradePrice.textContent = formatMoney(updated.current_price);
         updateMatchTradeTotal();
       }
     }
@@ -1418,8 +1462,7 @@ const Lobby = (() => {
       `;
     }).join('');
 
-    // Update portfolio
-    const pfRes = await API.getLobbyPortfolio(lobbyId);
+    // Update portfolio (already fetched in parallel above)
     if (pfRes.ok) {
       document.getElementById('match-cash').textContent = formatMoney(pfRes.data.cash);
       const holdings = pfRes.data.holdings;
@@ -1437,19 +1480,26 @@ const Lobby = (() => {
         `).join('');
       }
 
-      // Update selected stock holding count
       if (selectedTradeStock) {
         const held = holdings.find(h => h.stock_id === selectedTradeStock.id);
-        document.getElementById('match-trade-holding').textContent =
-          held ? `You own: ${held.shares} shares` : 'You own: 0 shares';
+        const holdingEl = document.getElementById('match-trade-holding');
+        if (holdingEl) holdingEl.textContent = held ? `You own: ${held.shares} shares` : 'You own: 0 shares';
         const sellBtn = document.getElementById('match-sell-btn');
         if (sellBtn) sellBtn.disabled = !held || held.shares <= 0;
       }
     }
   }
 
-  // Draw a line chart inside a match stock card
-  function drawMatchChart(canvasId, data) {
+  // --- INLINE CHART DRAWING (supports line + candlestick) ---
+  function drawMatchChart(canvasId, data, type) {
+    if (type === 'candle') {
+      drawMatchCandleChart(canvasId, data);
+    } else {
+      drawMatchLineChart(canvasId, data);
+    }
+  }
+
+  function drawMatchLineChart(canvasId, data) {
     const canvas = document.getElementById(canvasId);
     if (!canvas || data.length < 2) return;
     const ctx = canvas.getContext('2d');
@@ -1461,16 +1511,17 @@ const Lobby = (() => {
     const w = canvas.width - pad.left - pad.right;
     const h = canvas.height - pad.top - pad.bottom;
 
-    const min = Math.min(...data) * 0.998;
-    const max = Math.max(...data) * 1.002;
+    const closes = data.map(d => d.close);
+    const min = Math.min(...closes) * 0.998;
+    const max = Math.max(...closes) * 1.002;
     const range = max - min || 1;
 
-    const isUp = data[data.length - 1] >= data[0];
+    const isUp = closes[closes.length - 1] >= closes[0];
     const lineColor = isUp ? '#22c55e' : '#ef4444';
     const fillColor = isUp ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
 
-    const points = data.map((val, i) => ({
-      x: pad.left + (i / (data.length - 1)) * w,
+    const points = closes.map((val, i) => ({
+      x: pad.left + (i / (closes.length - 1)) * w,
       y: pad.top + h - ((val - min) / range) * h,
     }));
 
@@ -1506,6 +1557,66 @@ const Lobby = (() => {
     ctx.fillText('$' + min.toFixed(2), pad.left + 2, canvas.height - pad.bottom - 2);
   }
 
+  function drawMatchCandleChart(canvasId, data) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || data.length < 2) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    const pad = { top: 8, right: 8, bottom: 8, left: 8 };
+    const w = canvas.width - pad.left - pad.right;
+    const h = canvas.height - pad.top - pad.bottom;
+
+    // Find price range
+    let allMin = Infinity, allMax = -Infinity;
+    data.forEach(c => {
+      allMin = Math.min(allMin, c.low);
+      allMax = Math.max(allMax, c.high);
+    });
+    allMin *= 0.998;
+    allMax *= 1.002;
+    const range = allMax - allMin || 1;
+
+    const priceToY = (price) => pad.top + h - ((price - allMin) / range) * h;
+
+    const candleSpacing = w / data.length;
+    const candleWidth = Math.max(2, Math.min(8, candleSpacing * 0.6));
+
+    data.forEach((c, i) => {
+      const isGreen = c.close >= c.open;
+      const color = isGreen ? '#22c55e' : '#ef4444';
+
+      const x = pad.left + (i + 0.5) * candleSpacing;
+      const yOpen = priceToY(c.open);
+      const yClose = priceToY(c.close);
+      const yHigh = priceToY(c.high);
+      const yLow = priceToY(c.low);
+
+      // Wick
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, yHigh);
+      ctx.lineTo(x, yLow);
+      ctx.stroke();
+
+      // Body
+      const bodyTop = Math.min(yOpen, yClose);
+      const bodyHeight = Math.max(1, Math.abs(yOpen - yClose));
+      ctx.fillStyle = color;
+      ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+    });
+
+    // Price labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'left';
+    ctx.fillText('$' + allMax.toFixed(2), pad.left + 2, pad.top + 9);
+    ctx.fillText('$' + allMin.toFixed(2), pad.left + 2, canvas.height - pad.bottom - 2);
+  }
+
   function selectStock(stockId, symbol, price) {
     selectedTradeStock = { id: stockId, symbol, current_price: price };
     document.getElementById('match-trade-panel').style.display = 'block';
@@ -1513,7 +1624,6 @@ const Lobby = (() => {
     document.getElementById('match-trade-price').textContent = formatMoney(price);
     document.getElementById('match-trade-shares').value = 1;
     updateMatchTradeTotal();
-    // Highlight selected card
     document.querySelectorAll('.match-stock-card').forEach(c => c.classList.remove('selected'));
   }
 
@@ -1783,13 +1893,14 @@ const Lobby = (() => {
   function stopAllPolling() {
     if (matchPollInterval) { clearInterval(matchPollInterval); matchPollInterval = null; }
     if (waitingPollInterval) { clearInterval(waitingPollInterval); waitingPollInterval = null; }
+    if (matchTimerInterval) { clearInterval(matchTimerInterval); matchTimerInterval = null; }
   }
 
   return {
     load, showCreate, hideCreate, doCreate, toggleRewardFields,
     joinOrView, leaveRoom, startMatch,
     selectStock, closeTrade, updateMatchTradeTotal, matchTrade,
-    backToBrowser,
+    backToBrowser, toggleMatchChartType,
     openStockModal, closeStockModal, setChartType,
     updateModalTradeTotal, modalTrade,
   };
