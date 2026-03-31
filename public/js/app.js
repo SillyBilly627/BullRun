@@ -214,6 +214,7 @@ const Market = (() => {
   let filteredStocks = [];
   let currentChartType = 'line'; // 'line' or 'candle'
   let currentDetailStockId = null;
+  let currentDetailHistory = []; // Store history so we can redraw without refetching
 
   async function load() {
     const res = await API.getStocks();
@@ -361,6 +362,7 @@ const Market = (() => {
     }
 
     const { stock, history, holding } = res.data;
+    currentDetailHistory = history; // Save for chart redraw
     const pct = stock.previous_price > 0 ? ((stock.current_price - stock.previous_price) / stock.previous_price * 100) : 0;
     const dir = changeClass(stock.current_price, stock.previous_price);
     const basePct = stock.base_price > 0 ? ((stock.current_price - stock.base_price) / stock.base_price * 100) : 0;
@@ -451,8 +453,10 @@ const Market = (() => {
     currentChartType = type;
     document.getElementById('btn-line').classList.toggle('active', type === 'line');
     document.getElementById('btn-candle').classList.toggle('active', type === 'candle');
-    // Redraw by re-opening detail
-    if (currentDetailStockId) openDetail(currentDetailStockId);
+    // Redraw chart with stored history data (no refetch needed)
+    if (currentDetailHistory.length > 1) {
+      drawChart('stock-chart-canvas', currentDetailHistory, currentChartType);
+    }
   }
 
   function updateTradeTotal(type, pricePerShare) {
@@ -493,6 +497,8 @@ const Market = (() => {
   function closeModal() {
     document.getElementById('stock-modal').style.display = 'none';
     currentDetailStockId = null;
+    currentDetailHistory = [];
+    currentChartType = 'line';
   }
 
   // --- RANDOM EDUCATIONAL TIPS ---
