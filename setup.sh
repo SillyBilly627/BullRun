@@ -26,17 +26,28 @@ npx wrangler pages dev ./public --d1 DB --kv SESSION_STORE --port 8788 &
 SERVER_PID=$!
 
 # Wait for the server to start
-sleep 4
+sleep 5
 
 # Step 3: Hit the server to force it to create the DB file
+# We use the announcements endpoint because it queries the database
+# without needing authentication, which forces D1 to create the sqlite file
 echo "→ Triggering database creation..."
-curl -s -o /dev/null http://localhost:8788/api/auth/me 2>/dev/null
+curl -s -o /dev/null http://localhost:8788/api/announcements 2>/dev/null
+curl -s -o /dev/null -X POST -H "Content-Type: application/json" -d '{"username":"_setup_","password":"Setup1"}' http://localhost:8788/api/auth/signup 2>/dev/null
 
 # Wait a moment for the file to be written
-sleep 2
+sleep 3
 
-# Step 4: Find the SQLite database file
-DB_FILE=$(find .wrangler -name "*.sqlite" 2>/dev/null | head -1)
+# Step 4: Find the SQLite database file (with retries)
+DB_FILE=""
+for attempt in 1 2 3 4 5; do
+  DB_FILE=$(find .wrangler -name "*.sqlite" 2>/dev/null | head -1)
+  if [ -n "$DB_FILE" ]; then
+    break
+  fi
+  echo "  Waiting for database file (attempt $attempt)..."
+  sleep 2
+done
 
 if [ -z "$DB_FILE" ]; then
   echo "✘ Could not find the database file. Something went wrong."
