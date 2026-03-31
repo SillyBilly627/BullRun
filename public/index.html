@@ -140,6 +140,7 @@
         </div>
         <div class="nav-level" id="nav-level">
           <span class="level-badge">Lv <span id="nav-level-value">1</span></span>
+          <div class="nav-xp-container" id="nav-xp-info"></div>
         </div>
         <button class="nav-profile-btn" onclick="App.navigate('profile')" title="Your Profile">
           <span id="nav-username">Player</span>
@@ -295,13 +296,178 @@
         </div>
       </div>
 
-      <!-- LOBBIES PAGE (placeholder for Phase 3) -->
+      <!-- LOBBIES PAGE -->
       <div id="page-lobbies" class="page">
-        <h2>Closed Lobbies</h2>
-        <div class="coming-soon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          <h3>Coming Soon</h3>
-          <p>Competitive lobby matches are being built. Stay tuned!</p>
+        <!-- Lobby Browser (default view) -->
+        <div id="lobby-browser">
+          <div class="lobby-header">
+            <h2>Closed Lobbies</h2>
+            <button class="btn btn-primary btn-sm" onclick="Lobby.showCreate()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              Create Lobby
+            </button>
+          </div>
+          <p class="lobby-explainer">Compete against other players in fast-paced matches with randomly generated stocks. Win money and XP!</p>
+          <div id="lobby-list">
+            <p class="placeholder-text">Loading lobbies...</p>
+          </div>
+        </div>
+
+        <!-- Create Lobby Modal -->
+        <div id="lobby-create-modal" class="modal" style="display:none;">
+          <div class="modal-overlay" onclick="Lobby.hideCreate()"></div>
+          <div class="modal-content lobby-create-content">
+            <button class="modal-close" onclick="Lobby.hideCreate()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+            <h2 style="margin-bottom:1.5rem;">Create Lobby</h2>
+            <div class="create-form-grid">
+              <div class="input-group">
+                <label for="create-name">Lobby Name</label>
+                <input type="text" id="create-name" placeholder="My Lobby" maxlength="40">
+              </div>
+              <div class="create-form-row">
+                <div class="input-group">
+                  <label for="create-time">Match Length</label>
+                  <select id="create-time" class="form-select">
+                    <option value="5">5 minutes</option>
+                    <option value="10">10 minutes</option>
+                    <option value="15" selected>15 minutes</option>
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label for="create-players">Max Players</label>
+                  <select id="create-players" class="form-select">
+                    <option value="2">2 players</option>
+                    <option value="4">4 players</option>
+                    <option value="6">6 players</option>
+                    <option value="8" selected>8 players</option>
+                  </select>
+                </div>
+              </div>
+              <div class="create-form-row">
+                <div class="input-group">
+                  <label for="create-tick">Tick Speed</label>
+                  <select id="create-tick" class="form-select">
+                    <option value="3">3 sec (fast)</option>
+                    <option value="5" selected>5 sec (normal)</option>
+                    <option value="7">7 sec (slow)</option>
+                    <option value="10">10 sec (chill)</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label for="create-locked">Access</label>
+                  <select id="create-locked" class="form-select">
+                    <option value="0" selected>Open (anyone can join)</option>
+                    <option value="1">Locked (invite only)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="create-reward">Reward Type</label>
+                <select id="create-reward" class="form-select" onchange="Lobby.toggleRewardFields()">
+                  <option value="pool" selected>Money Pool (entry fee)</option>
+                  <option value="percentage">Percentage (of balance)</option>
+                </select>
+              </div>
+              <div id="reward-pool-fields">
+                <div class="input-group">
+                  <label for="create-entry-fee">Entry Fee ($)</label>
+                  <input type="number" id="create-entry-fee" value="500" min="0" max="5000" step="100">
+                  <span class="input-hint">Each player pays this. Winners split the pot.</span>
+                </div>
+              </div>
+              <div id="reward-pct-fields" style="display:none;">
+                <div class="input-group">
+                  <label for="create-reward-pct">Reward Percentage (%)</label>
+                  <input type="number" id="create-reward-pct" value="10" min="1" max="50">
+                  <span class="input-hint">Winners earn this % of their Open mode balance.</span>
+                </div>
+              </div>
+              <div id="create-error" class="error-message"></div>
+              <button class="btn btn-primary btn-full" id="create-lobby-btn" onclick="Lobby.doCreate()">
+                Create Lobby
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Waiting Room -->
+        <div id="lobby-waiting" style="display:none;">
+          <div class="lobby-room-header">
+            <button class="btn btn-secondary btn-sm" onclick="Lobby.leaveRoom()">← Leave</button>
+            <div>
+              <h2 id="waiting-lobby-name">Lobby</h2>
+              <span class="text-muted" id="waiting-lobby-settings" style="font-size:0.78rem;"></span>
+            </div>
+            <div id="waiting-actions"></div>
+          </div>
+          <div class="lobby-settings-bar" id="waiting-settings-bar"></div>
+          <div class="lobby-players-list" id="waiting-players">
+            <p class="placeholder-text">Loading players...</p>
+          </div>
+        </div>
+
+        <!-- Active Match -->
+        <div id="lobby-match" style="display:none;">
+          <div class="match-top-bar">
+            <div class="match-timer" id="match-timer">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              <span id="match-timer-text">--:--</span>
+            </div>
+            <h2 id="match-lobby-name" style="font-size:1.1rem;"></h2>
+            <div class="match-balance">
+              <span class="money-label">Match Cash</span>
+              <span class="money-value" id="match-cash">$10,000.00</span>
+            </div>
+          </div>
+
+          <div class="match-layout">
+            <!-- Left: Stock list + trade -->
+            <div class="match-stocks-panel">
+              <h3>Stocks</h3>
+              <div id="match-stock-list"></div>
+              <div id="match-trade-panel" style="display:none;">
+                <div class="match-trade-header">
+                  <h4 id="match-trade-symbol">TRADE</h4>
+                  <button class="btn btn-secondary btn-sm" onclick="Lobby.closeTrade()" style="padding:0.3rem 0.5rem;">✕</button>
+                </div>
+                <div class="match-trade-info">
+                  <span id="match-trade-price"></span>
+                  <span id="match-trade-holding" class="text-muted"></span>
+                </div>
+                <div class="match-trade-form">
+                  <input type="number" id="match-trade-shares" min="1" value="1" placeholder="Shares" oninput="Lobby.updateMatchTradeTotal()">
+                  <span class="trade-total mono" id="match-trade-total">$0.00</span>
+                  <div class="match-trade-btns">
+                    <button class="btn btn-primary btn-sm" id="match-buy-btn" onclick="Lobby.matchTrade('buy')">Buy</button>
+                    <button class="btn btn-danger btn-sm" id="match-sell-btn" onclick="Lobby.matchTrade('sell')">Sell</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Leaderboard + portfolio -->
+            <div class="match-sidebar">
+              <div class="match-rankings-card">
+                <h3>Rankings</h3>
+                <div id="match-rankings"></div>
+              </div>
+              <div class="match-portfolio-card">
+                <h3>Your Holdings</h3>
+                <div id="match-portfolio"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Post-Game Results -->
+        <div id="lobby-results" style="display:none;">
+          <div id="results-content">
+            <p class="placeholder-text">Loading results...</p>
+          </div>
         </div>
       </div>
 
@@ -339,6 +505,31 @@
       </button>
       <div id="stock-detail-content">
         <p class="placeholder-text">Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- GLOBAL CHAT PANEL              -->
+  <!-- ============================== -->
+  <div id="chat-panel" class="chat-panel" style="display:none;">
+    <div class="chat-header" onclick="Chat.toggle()">
+      <div class="chat-header-left">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span>Global Chat</span>
+        <span class="chat-badge" id="chat-badge" style="display:none;">0</span>
+      </div>
+      <svg class="chat-chevron" id="chat-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+    </div>
+    <div class="chat-body" id="chat-body" style="display:none;">
+      <div class="chat-messages" id="chat-messages">
+        <p class="placeholder-text" style="padding:1rem;">Loading chat...</p>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="200" onkeydown="if(event.key==='Enter')Chat.send()">
+        <button class="chat-send-btn" onclick="Chat.send()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
       </div>
     </div>
   </div>

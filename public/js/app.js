@@ -80,6 +80,8 @@ const App = (() => {
     navigate('home');
     // Load announcements
     loadAnnouncements();
+    // Initialize global chat
+    Chat.init();
   }
 
   // Update the navigation bar with user info
@@ -89,6 +91,22 @@ const App = (() => {
     document.getElementById('nav-level-value').textContent = currentUser.level || 1;
     document.getElementById('nav-username').textContent = currentUser.username;
     document.getElementById('home-username').textContent = currentUser.username;
+
+    // Update XP progress bar if it exists
+    const xpContainer = document.getElementById('nav-xp-info');
+    if (xpContainer) {
+      const level = currentUser.level || 1;
+      const xp = currentUser.xp || 0;
+      const currentLevelXp = 50 * (level - 1) * level / 2;
+      const nextLevelXp = 50 * level * (level + 1) / 2;
+      const progress = nextLevelXp > currentLevelXp
+        ? ((xp - currentLevelXp) / (nextLevelXp - currentLevelXp)) * 100
+        : 0;
+      xpContainer.innerHTML = `
+        <span class="nav-xp-text">${xp - currentLevelXp} / ${nextLevelXp - currentLevelXp} XP</span>
+        <div class="xp-bar-track"><div class="xp-bar-fill" style="width:${Math.min(100, progress)}%"></div></div>
+      `;
+    }
   }
 
   // Navigate to a page
@@ -108,6 +126,7 @@ const App = (() => {
       case 'home': loadHome(); break;
       case 'market': Market.load(); break;
       case 'portfolio': Portfolio.load(); break;
+      case 'lobbies': Lobby.load(); break;
       case 'leaderboard': Leaderboard.show('weekly'); break;
       case 'profile': Profile.loadOwn(); break;
     }
@@ -994,6 +1013,663 @@ const Profile = (() => {
   }
 
   return { loadOwn, loadById };
+})();
+
+// ============================================================
+// LOBBY — Competitive Match System
+// ============================================================
+const Lobby = (() => {
+  let currentLobby = null;      // The lobby object if we're in one
+  let matchPollInterval = null;  // Timer for polling match updates
+  let waitingPollInterval = null;// Timer for polling waiting room
+  let selectedTradeStock = null; // Currently selected stock for trading in match
+
+  // --- MAIN LOAD: checks if user is already in a lobby ---
+  async function load() {
+    // Check if player is in a lobby
+    const activeRes = await API.getMyActiveLobby();
+    if (activeRes.ok && activeRes.data.lobby) {
+      currentLobby = activeRes.data.lobby;
+      if (currentLobby.status === 'active') {
+        showMatch(currentLobby.id);
+      } else if (currentLobby.status === 'waiting') {
+        showWaiting(currentLobby.id);
+      }
+    } else {
+      // Also check for recently finished lobby to show results
+      currentLobby = null;
+      showBrowser();
+    }
+  }
+
+  // --- BROWSER: list open lobbies ---
+  async function showBrowser() {
+    document.getElementById('lobby-browser').style.display = 'block';
+    document.getElementById('lobby-waiting').style.display = 'none';
+    document.getElementById('lobby-match').style.display = 'none';
+    document.getElementById('lobby-results').style.display = 'none';
+    stopAllPolling();
+
+    const listEl = document.getElementById('lobby-list');
+    listEl.innerHTML = '<p class="placeholder-text">Loading lobbies...</p>';
+
+    const res = await API.getLobbies();
+    if (!res.ok) {
+      listEl.innerHTML = '<p class="placeholder-text">Failed to load lobbies</p>';
+      return;
+    }
+
+    const lobbies = res.data.lobbies;
+    if (lobbies.length === 0) {
+      listEl.innerHTML = `
+        <div class="empty-state" style="padding:3rem;">
+          <p>No lobbies right now. Be the first to create one!</p>
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = lobbies.map(l => {
+      const rewardText = l.reward_type === 'pool'
+        ? `$${parseFloat(l.pool_entry_fee).toFixed(0)} entry`
+        : `${l.reward_percentage}% reward`;
+      return `
+        <div class="lobby-card" onclick="Lobby.joinOrView(${l.id})">
+          <div>
+            <div class="lobby-card-name">${l.name}</div>
+            <div class="lobby-card-creator">by ${l.creator_name} · Lv ${l.creator_level}</div>
+          </div>
+          <div class="lobby-card-meta">
+            <span>${l.time_limit_minutes}min</span>
+            <span>·</span>
+            <span>${l.tick_speed_seconds}s ticks</span>
+          </div>
+          <div class="lobby-card-players">${l.player_count}/${l.max_players}</div>
+          <div>
+            <span class="lobby-card-badge ${l.status}">${l.status}</span>
+            ${l.is_locked ? '<span class="lobby-card-badge locked" style="margin-left:0.25rem;">🔒</span>' : ''}
+            <div class="lobby-card-reward" style="margin-top:0.2rem;">${rewardText}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // --- JOIN or VIEW a lobby ---
+  async function joinOrView(lobbyId) {
+    // Check if we're already in this lobby
+    if (currentLobby && currentLobby.id === lobbyId) {
+      if (currentLobby.status === 'active') showMatch(lobbyId);
+      else showWaiting(lobbyId);
+      return;
+    }
+
+    // Try to get lobby details first
+    const detailRes = await API.getLobbyDetails(lobbyId);
+    if (!detailRes.ok) {
+      showToast(detailRes.data.error || 'Cannot access lobby', 'error');
+      return;
+    }
+
+    const lobby = detailRes.data.lobby;
+
+    // If it's active, we can only view if we're in it
+    if (lobby.status === 'active') {
+      const isInIt = detailRes.data.players.some(p => p.user_id === currentUser.id);
+      if (isInIt) {
+        currentLobby = lobby;
+        showMatch(lobbyId);
+      } else {
+        showToast('This match is already in progress', 'info');
+      }
+      return;
+    }
+
+    // If it's finished
+    if (lobby.status === 'finished') {
+      showResults(lobbyId);
+      return;
+    }
+
+    // Try to join (waiting state)
+    const isAlreadyIn = detailRes.data.players.some(p => p.user_id === currentUser.id);
+    if (!isAlreadyIn) {
+      const joinRes = await API.joinLobby(lobbyId);
+      if (!joinRes.ok) {
+        showToast(joinRes.data.error || 'Failed to join', 'error');
+        return;
+      }
+      showToast('Joined lobby!', 'success');
+      // Refresh user money (entry fee may have been deducted)
+      const meRes = await API.getMe();
+      if (meRes.ok) { currentUser = meRes.data.user; App.updateNav(); }
+    }
+
+    currentLobby = lobby;
+    showWaiting(lobbyId);
+  }
+
+  // --- CREATE LOBBY ---
+  function showCreate() {
+    document.getElementById('lobby-create-modal').style.display = 'flex';
+    document.getElementById('create-error').textContent = '';
+  }
+  function hideCreate() {
+    document.getElementById('lobby-create-modal').style.display = 'none';
+  }
+  function toggleRewardFields() {
+    const type = document.getElementById('create-reward').value;
+    document.getElementById('reward-pool-fields').style.display = type === 'pool' ? 'block' : 'none';
+    document.getElementById('reward-pct-fields').style.display = type === 'percentage' ? 'block' : 'none';
+  }
+
+  async function doCreate() {
+    const settings = {
+      name: document.getElementById('create-name').value || '',
+      timeLimit: parseInt(document.getElementById('create-time').value),
+      maxPlayers: parseInt(document.getElementById('create-players').value),
+      tickSpeed: parseInt(document.getElementById('create-tick').value),
+      isLocked: document.getElementById('create-locked').value === '1',
+      rewardType: document.getElementById('create-reward').value,
+      entryFee: parseFloat(document.getElementById('create-entry-fee').value) || 500,
+      rewardPercentage: parseFloat(document.getElementById('create-reward-pct').value) || 10,
+    };
+
+    const res = await API.createLobby(settings);
+    if (!res.ok) {
+      document.getElementById('create-error').textContent = res.data.error || 'Failed to create lobby';
+      return;
+    }
+
+    hideCreate();
+    showToast('Lobby created!', 'success');
+    // Refresh user money
+    const meRes = await API.getMe();
+    if (meRes.ok) { currentUser = meRes.data.user; App.updateNav(); }
+    // Go to waiting room
+    currentLobby = { id: res.data.lobbyId };
+    showWaiting(res.data.lobbyId);
+  }
+
+  // --- WAITING ROOM ---
+  async function showWaiting(lobbyId) {
+    document.getElementById('lobby-browser').style.display = 'none';
+    document.getElementById('lobby-waiting').style.display = 'block';
+    document.getElementById('lobby-match').style.display = 'none';
+    document.getElementById('lobby-results').style.display = 'none';
+    stopAllPolling();
+
+    await refreshWaiting(lobbyId);
+
+    // Poll every 3 seconds to see new players / if match started
+    waitingPollInterval = setInterval(() => refreshWaiting(lobbyId), 3000);
+  }
+
+  async function refreshWaiting(lobbyId) {
+    const res = await API.getLobbyDetails(lobbyId);
+    if (!res.ok) return;
+
+    const { lobby, players } = res.data;
+    currentLobby = lobby;
+
+    // If match started while we were waiting, switch to match view
+    if (lobby.status === 'active') {
+      stopAllPolling();
+      showMatch(lobbyId);
+      return;
+    }
+
+    // If lobby was deleted/finished, go back
+    if (lobby.status === 'finished' || !lobby) {
+      stopAllPolling();
+      showBrowser();
+      showToast('Lobby closed', 'info');
+      return;
+    }
+
+    document.getElementById('waiting-lobby-name').textContent = lobby.name;
+    document.getElementById('waiting-lobby-settings').textContent =
+      `${lobby.time_limit_minutes}min · ${lobby.tick_speed_seconds}s ticks · ${lobby.reward_type === 'pool' ? '$' + parseFloat(lobby.pool_entry_fee).toFixed(0) + ' pool' : lobby.reward_percentage + '% reward'}`;
+
+    // Settings tags
+    document.getElementById('waiting-settings-bar').innerHTML = `
+      <span class="lobby-setting-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> ${lobby.time_limit_minutes} min</span>
+      <span class="lobby-setting-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> ${lobby.tick_speed_seconds}s ticks</span>
+      <span class="lobby-setting-tag">${players.length}/${lobby.max_players} players</span>
+      <span class="lobby-setting-tag">${lobby.is_locked ? '🔒 Locked' : '🔓 Open'}</span>
+    `;
+
+    // Actions (only creator can start)
+    const isCreator = lobby.creator_id === currentUser.id;
+    document.getElementById('waiting-actions').innerHTML = isCreator
+      ? `<button class="btn btn-primary btn-sm" onclick="Lobby.startMatch(${lobbyId})" ${players.length < 2 ? 'disabled title="Need at least 2 players"' : ''}>
+           Start Match (${players.length} players)
+         </button>`
+      : `<span class="text-muted" style="font-size:0.82rem;">Waiting for host to start...</span>`;
+
+    // Player list
+    document.getElementById('waiting-players').innerHTML = players.map(p => {
+      const isC = p.user_id === lobby.creator_id;
+      const isMe = p.user_id === currentUser.id;
+      return `
+        <div class="lobby-player-card ${isC ? 'creator' : ''}">
+          <div class="lobby-player-avatar">${p.username.charAt(0).toUpperCase()}</div>
+          <div>
+            <div class="lobby-player-name">${p.username} ${isMe ? '(you)' : ''} ${isC ? '👑' : ''}</div>
+          </div>
+          <span class="lobby-player-level">Lv ${p.level}</span>
+          <span class="lobby-player-money">${formatMoney(p.open_money)}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function startMatch(lobbyId) {
+    const res = await API.startLobby(lobbyId);
+    if (!res.ok) {
+      showToast(res.data.error || 'Failed to start', 'error');
+      return;
+    }
+    stopAllPolling();
+    showMatch(lobbyId);
+  }
+
+  async function leaveRoom() {
+    if (!currentLobby) { showBrowser(); return; }
+    const res = await API.leaveLobby(currentLobby.id);
+    if (res.ok) {
+      showToast('Left lobby', 'info');
+      // Refresh money (refund)
+      const meRes = await API.getMe();
+      if (meRes.ok) { currentUser = meRes.data.user; App.updateNav(); }
+    }
+    currentLobby = null;
+    stopAllPolling();
+    showBrowser();
+  }
+
+  // --- ACTIVE MATCH ---
+  async function showMatch(lobbyId) {
+    document.getElementById('lobby-browser').style.display = 'none';
+    document.getElementById('lobby-waiting').style.display = 'none';
+    document.getElementById('lobby-match').style.display = 'block';
+    document.getElementById('lobby-results').style.display = 'none';
+    stopAllPolling();
+    selectedTradeStock = null;
+
+    // Get lobby details for name
+    const detailRes = await API.getLobbyDetails(lobbyId);
+    if (detailRes.ok) {
+      document.getElementById('match-lobby-name').textContent = detailRes.data.lobby.name;
+    }
+
+    // Initial tick + render
+    await refreshMatch(lobbyId);
+
+    // Poll every 2 seconds for match updates
+    matchPollInterval = setInterval(() => refreshMatch(lobbyId), 2000);
+  }
+
+  async function refreshMatch(lobbyId) {
+    const tickRes = await API.lobbyTick(lobbyId);
+    if (!tickRes.ok) {
+      if (tickRes.data.error === 'Lobby is not active') {
+        stopAllPolling();
+        showResults(lobbyId);
+      }
+      return;
+    }
+
+    if (tickRes.data.matchEnded) {
+      stopAllPolling();
+      showResults(lobbyId);
+      return;
+    }
+
+    const { prices, rankings, timeRemaining } = tickRes.data;
+
+    // Update timer
+    const mins = Math.floor(timeRemaining / 60);
+    const secs = timeRemaining % 60;
+    const timerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    document.getElementById('match-timer-text').textContent = timerText;
+    const timerEl = document.getElementById('match-timer');
+    timerEl.classList.toggle('urgent', timeRemaining < 30);
+
+    // Update stock list
+    const stockListEl = document.getElementById('match-stock-list');
+    stockListEl.innerHTML = prices.map(s => {
+      const pct = s.previous_price > 0 ? ((s.current_price - s.previous_price) / s.previous_price * 100) : 0;
+      const dir = changeClass(s.current_price, s.previous_price);
+      const sel = selectedTradeStock && selectedTradeStock.id === s.id ? 'selected' : '';
+      return `
+        <div class="match-stock-row ${sel}" onclick="Lobby.selectStock(${s.id}, '${s.symbol}', ${s.current_price})">
+          <span class="stock-symbol" style="font-size:0.82rem;">${s.symbol}</span>
+          <span class="stock-name" style="font-size:0.75rem;color:var(--text-muted);"></span>
+          <span class="stock-price mono" style="font-size:0.85rem;">${formatMoney(s.current_price)}</span>
+          <span class="stock-change ${dir}" style="font-size:0.72rem;">${formatPercent(pct)}</span>
+        </div>
+      `;
+    }).join('');
+
+    // Update selected trade stock price if open
+    if (selectedTradeStock) {
+      const updated = prices.find(p => p.id === selectedTradeStock.id);
+      if (updated) {
+        selectedTradeStock.current_price = updated.current_price;
+        document.getElementById('match-trade-price').textContent = formatMoney(updated.current_price);
+        updateMatchTradeTotal();
+      }
+    }
+
+    // Update rankings
+    document.getElementById('match-rankings').innerHTML = rankings.map((r, i) => {
+      const pos = i + 1;
+      const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : '';
+      const isMe = r.user_id === currentUser.id;
+      return `
+        <div class="match-rank-row ${isMe ? 'is-me' : ''}">
+          <span class="match-rank-pos ${posClass}">#${pos}</span>
+          <span class="match-rank-name">${r.username}${isMe ? ' (you)' : ''}</span>
+          <span class="match-rank-worth ${r.netWorth >= 10000 ? 'text-gain' : 'text-loss'}">${formatMoney(r.netWorth)}</span>
+        </div>
+      `;
+    }).join('');
+
+    // Update portfolio
+    const pfRes = await API.getLobbyPortfolio(lobbyId);
+    if (pfRes.ok) {
+      document.getElementById('match-cash').textContent = formatMoney(pfRes.data.cash);
+      const holdings = pfRes.data.holdings;
+      if (holdings.length === 0) {
+        document.getElementById('match-portfolio').innerHTML = '<p class="text-muted" style="font-size:0.78rem;">No holdings yet</p>';
+      } else {
+        document.getElementById('match-portfolio').innerHTML = holdings.map(h => `
+          <div class="match-holding-row">
+            <div>
+              <span class="mono" style="font-weight:600;font-size:0.82rem;">${h.symbol}</span>
+              <span class="text-muted" style="font-size:0.7rem;margin-left:0.3rem;">${h.shares} shares</span>
+            </div>
+            <span class="mono ${formatPnlColor(h.profitLoss)}" style="font-size:0.78rem;">${formatMoney(h.profitLoss)}</span>
+          </div>
+        `).join('');
+      }
+
+      // Update selected stock holding count
+      if (selectedTradeStock) {
+        const held = holdings.find(h => h.stock_id === selectedTradeStock.id);
+        document.getElementById('match-trade-holding').textContent =
+          held ? `You own: ${held.shares} shares` : 'You own: 0 shares';
+        // Disable sell if 0
+        const sellBtn = document.getElementById('match-sell-btn');
+        if (sellBtn) sellBtn.disabled = !held || held.shares <= 0;
+      }
+    }
+  }
+
+  function selectStock(stockId, symbol, price) {
+    selectedTradeStock = { id: stockId, symbol, current_price: price };
+    document.getElementById('match-trade-panel').style.display = 'block';
+    document.getElementById('match-trade-symbol').textContent = symbol;
+    document.getElementById('match-trade-price').textContent = formatMoney(price);
+    document.getElementById('match-trade-shares').value = 1;
+    updateMatchTradeTotal();
+    // Highlight selected row
+    document.querySelectorAll('.match-stock-row').forEach(r => r.classList.remove('selected'));
+  }
+
+  function closeTrade() {
+    selectedTradeStock = null;
+    document.getElementById('match-trade-panel').style.display = 'none';
+  }
+
+  function updateMatchTradeTotal() {
+    if (!selectedTradeStock) return;
+    const shares = parseInt(document.getElementById('match-trade-shares').value) || 0;
+    document.getElementById('match-trade-total').textContent = formatMoney(shares * selectedTradeStock.current_price);
+  }
+
+  async function matchTrade(type) {
+    if (!selectedTradeStock || !currentLobby) return;
+    const shares = parseInt(document.getElementById('match-trade-shares').value);
+    if (!shares || shares < 1) {
+      showToast('Enter a valid number of shares', 'error');
+      return;
+    }
+
+    let res;
+    if (type === 'buy') {
+      res = await API.lobbyBuy(currentLobby.id, selectedTradeStock.id, shares);
+    } else {
+      res = await API.lobbySell(currentLobby.id, selectedTradeStock.id, shares);
+    }
+
+    if (res.ok) {
+      showToast(res.data.message, 'success');
+      document.getElementById('match-cash').textContent = formatMoney(res.data.newBalance);
+    } else {
+      showToast(res.data.error || 'Trade failed', 'error');
+    }
+  }
+
+  // --- POST-GAME RESULTS ---
+  async function showResults(lobbyId) {
+    document.getElementById('lobby-browser').style.display = 'none';
+    document.getElementById('lobby-waiting').style.display = 'none';
+    document.getElementById('lobby-match').style.display = 'none';
+    document.getElementById('lobby-results').style.display = 'block';
+    stopAllPolling();
+
+    const res = await API.getLobbyResults(lobbyId);
+    if (!res.ok) {
+      document.getElementById('results-content').innerHTML =
+        `<p class="error-message">${res.data.error || 'Failed to load results'}</p>
+         <button class="btn btn-secondary btn-sm" onclick="Lobby.backToBrowser()" style="margin-top:1rem;">Back to Lobbies</button>`;
+      return;
+    }
+
+    const { lobby, results } = res.data;
+    const myResult = results.find(r => r.user_id === currentUser.id);
+    const myPlacement = myResult ? myResult.placement : '-';
+    const placementEmoji = myPlacement === 1 ? '🥇' : myPlacement === 2 ? '🥈' : myPlacement === 3 ? '🥉' : '🏁';
+
+    document.getElementById('results-content').innerHTML = `
+      <div class="results-card">
+        <span class="results-placement">${placementEmoji}</span>
+        <h2>Match Complete!</h2>
+        <p class="text-muted" style="font-size:0.9rem;">${lobby.name}</p>
+        ${myResult ? `
+          <div style="margin-top:1rem;">
+            <span class="text-muted">Your Placement: </span>
+            <strong style="font-size:1.2rem;">#${myPlacement}</strong>
+            ${myResult.reward_earned > 0 ? `<span class="results-reward" style="margin-left:1rem;">+${formatMoney(myResult.reward_earned)}</span>` : ''}
+            ${myResult.xp_earned > 0 ? `<span class="results-xp" style="margin-left:0.75rem;">+${myResult.xp_earned} XP</span>` : ''}
+          </div>
+        ` : ''}
+      </div>
+
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Player</th>
+            <th>Final Money</th>
+            <th>Profit</th>
+            <th>Trades</th>
+            <th>Reward</th>
+            <th>XP</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${results.map(r => {
+            const isMe = r.user_id === currentUser.id;
+            const profit = (r.final_money || 0) - 10000;
+            return `
+              <tr class="${isMe ? 'is-me' : ''}">
+                <td class="rank-cell">#${r.placement}</td>
+                <td style="font-family:var(--font-display);font-weight:${isMe ? '700' : '500'};">${r.username}${isMe ? ' (you)' : ''}</td>
+                <td>${formatMoney(r.final_money)}</td>
+                <td class="${formatPnlColor(profit)}">${formatMoney(profit)}</td>
+                <td>${r.tradeStats ? (r.tradeStats.buys + r.tradeStats.sells) : 0}</td>
+                <td class="results-reward">${r.reward_earned > 0 ? '+' + formatMoney(r.reward_earned) : '-'}</td>
+                <td class="results-xp">+${r.xp_earned || 0}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+
+      <div style="text-align:center;margin-top:1.5rem;">
+        <button class="btn btn-primary" onclick="Lobby.backToBrowser()">Back to Lobbies</button>
+      </div>
+    `;
+
+    // Refresh user data (rewards + XP applied)
+    const meRes = await API.getMe();
+    if (meRes.ok) { currentUser = meRes.data.user; App.updateNav(); }
+    currentLobby = null;
+  }
+
+  function backToBrowser() {
+    currentLobby = null;
+    showBrowser();
+  }
+
+  // --- CLEANUP ---
+  function stopAllPolling() {
+    if (matchPollInterval) { clearInterval(matchPollInterval); matchPollInterval = null; }
+    if (waitingPollInterval) { clearInterval(waitingPollInterval); waitingPollInterval = null; }
+  }
+
+  return {
+    load, showCreate, hideCreate, doCreate, toggleRewardFields,
+    joinOrView, leaveRoom, startMatch,
+    selectStock, closeTrade, updateMatchTradeTotal, matchTrade,
+    backToBrowser,
+  };
+})();
+
+// ============================================================
+// CHAT — Global Chat Panel
+// ============================================================
+const Chat = (() => {
+  let isOpen = false;
+  let chatPollInterval = null;
+  let lastMessageTime = null;
+  let unreadCount = 0;
+
+  // Called on login — initializes chat
+  function init() {
+    // Check if chat is enabled
+    API.getChatStatus().then(res => {
+      if (res.ok && res.data.chatEnabled) {
+        document.getElementById('chat-panel').style.display = 'block';
+        startPolling();
+      }
+    });
+  }
+
+  function toggle() {
+    isOpen = !isOpen;
+    const panel = document.getElementById('chat-panel');
+    const body = document.getElementById('chat-body');
+    panel.classList.toggle('open', isOpen);
+    body.style.display = isOpen ? 'block' : 'none';
+
+    if (isOpen) {
+      unreadCount = 0;
+      document.getElementById('chat-badge').style.display = 'none';
+      // Scroll to bottom
+      const msgs = document.getElementById('chat-messages');
+      msgs.scrollTop = msgs.scrollHeight;
+      // Focus input
+      document.getElementById('chat-input').focus();
+    }
+  }
+
+  function startPolling() {
+    // Initial load
+    loadMessages();
+    // Poll every 4 seconds
+    chatPollInterval = setInterval(loadMessages, 4000);
+  }
+
+  function stopPolling() {
+    if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
+  }
+
+  async function loadMessages() {
+    const res = await API.getChatMessages(lastMessageTime || '');
+    if (!res.ok) return;
+    if (res.data.disabled) {
+      document.getElementById('chat-messages').innerHTML =
+        '<p class="placeholder-text" style="padding:1rem;">Chat is currently disabled.</p>';
+      return;
+    }
+
+    const msgs = res.data.messages;
+    if (msgs.length === 0 && !lastMessageTime) {
+      document.getElementById('chat-messages').innerHTML =
+        '<p class="placeholder-text" style="padding:1rem;">No messages yet. Say hi!</p>';
+      return;
+    }
+
+    if (msgs.length > 0) {
+      const container = document.getElementById('chat-messages');
+      // If this is the first load (no lastMessageTime), replace content
+      if (!lastMessageTime) {
+        container.innerHTML = '';
+      }
+
+      msgs.forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'chat-msg';
+        const time = new Date(m.created_at + 'Z');
+        const timeStr = time.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+        const isMe = currentUser && m.username === currentUser.username;
+        div.innerHTML = `
+          <span class="chat-msg-user" style="${isMe ? 'color:var(--gain);' : ''}">${m.username}</span>
+          <span class="chat-msg-level">Lv${m.level}</span>
+          <span class="chat-msg-time">${timeStr}</span>
+          <div class="chat-msg-text">${m.message}</div>
+        `;
+        container.appendChild(div);
+      });
+
+      // Scroll to bottom
+      container.scrollTop = container.scrollHeight;
+
+      // Update last message time
+      lastMessageTime = msgs[msgs.length - 1].created_at;
+
+      // Show unread badge if closed
+      if (!isOpen && lastMessageTime) {
+        unreadCount += msgs.length;
+        const badge = document.getElementById('chat-badge');
+        badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+        badge.style.display = 'inline';
+      }
+    }
+  }
+
+  async function send() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    if (!message) return;
+
+    input.value = '';
+    const res = await API.sendChatMessage(message);
+    if (!res.ok) {
+      showToast(res.data.error || 'Failed to send message', 'error');
+      input.value = message; // Restore on failure
+      return;
+    }
+
+    // Immediately poll for new messages
+    await loadMessages();
+  }
+
+  return { init, toggle, send, stopPolling };
 })();
 
 // ============================================================

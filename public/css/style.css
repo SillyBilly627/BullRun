@@ -262,7 +262,7 @@ input, button, select { font-family: inherit; }
 .money-label { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
 .money-value { font-size: 0.9rem; font-weight: 600; color: var(--gain); }
 
-.nav-level { margin-right: 0.25rem; }
+.nav-level { margin-right: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
 .level-badge {
   font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600;
   background: var(--blue-bg); color: var(--blue);
@@ -899,4 +899,379 @@ input, button, select { font-family: inherit; }
   .nav-tab span { display: none; }
   .nav-tab { padding: 0.6rem; }
   .page-content { padding-bottom: 5rem; }
+}
+
+/* ============================================================
+   LOBBY SYSTEM
+   ============================================================ */
+
+/* Lobby browser header */
+.lobby-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.lobby-header h2 { font-size: 1.4rem; font-weight: 700; }
+.lobby-explainer {
+  font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.25rem;
+  font-family: var(--font-mono);
+}
+
+/* Lobby list cards */
+.lobby-card {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center; gap: 1.25rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); margin-bottom: 0.5rem;
+  cursor: pointer; transition: all 0.15s;
+}
+.lobby-card:hover {
+  border-color: var(--border-light); background: var(--bg-card-hover);
+  transform: translateX(2px);
+}
+.lobby-card-name {
+  font-weight: 600; font-size: 0.95rem; color: var(--text-primary);
+}
+.lobby-card-creator {
+  font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;
+}
+.lobby-card-meta {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-family: var(--font-mono); font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.lobby-card-badge {
+  padding: 0.2rem 0.6rem; border-radius: 10px;
+  font-size: 0.7rem; font-weight: 600; font-family: var(--font-mono);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.lobby-card-badge.waiting { background: var(--gain-bg); color: var(--gain); }
+.lobby-card-badge.active { background: var(--amber-bg); color: var(--amber); }
+.lobby-card-badge.locked { background: var(--loss-bg); color: var(--loss); }
+.lobby-card-players {
+  font-family: var(--font-mono); font-size: 0.82rem; font-weight: 500;
+  color: var(--text-secondary);
+}
+.lobby-card-reward {
+  font-family: var(--font-mono); font-size: 0.78rem; color: var(--amber);
+}
+
+/* Create lobby modal */
+.lobby-create-content {
+  max-width: 520px; height: auto; max-height: 90vh; overflow-y: auto;
+}
+.create-form-grid { display: flex; flex-direction: column; gap: 0.75rem; }
+.create-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.form-select {
+  width: 100%; padding: 0.75rem 1rem;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-size: 0.9rem; font-family: var(--font-mono);
+  appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+}
+.form-select:focus {
+  outline: none; border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+
+/* Waiting room */
+.lobby-room-header {
+  display: flex; align-items: center; gap: 1rem;
+  margin-bottom: 1rem;
+}
+.lobby-room-header h2 { font-size: 1.3rem; font-weight: 700; flex: 1; }
+.lobby-settings-bar {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem;
+}
+.lobby-setting-tag {
+  display: flex; align-items: center; gap: 0.35rem;
+  padding: 0.35rem 0.75rem; border-radius: 20px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  font-size: 0.72rem; font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+.lobby-setting-tag svg { opacity: 0.6; }
+
+.lobby-players-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.lobby-player-card {
+  display: grid;
+  grid-template-columns: 40px 1fr auto auto;
+  align-items: center; gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.lobby-player-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--gain), var(--blue));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; font-weight: 800; color: #0b0f19;
+}
+.lobby-player-name { font-weight: 600; font-size: 0.92rem; }
+.lobby-player-level {
+  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600;
+  background: var(--blue-bg); color: var(--blue);
+  padding: 0.2rem 0.5rem; border-radius: 20px;
+  border: 1px solid rgba(59,130,246,0.2);
+}
+.lobby-player-money {
+  font-family: var(--font-mono); font-size: 0.85rem;
+  font-weight: 500; color: var(--gain);
+}
+.lobby-player-card.creator { border-color: var(--amber); }
+.lobby-player-card.creator .lobby-player-avatar {
+  background: linear-gradient(135deg, var(--amber), #f59e0b);
+}
+
+/* Active Match */
+.match-top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); margin-bottom: 1rem;
+}
+.match-timer {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-family: var(--font-mono); font-size: 1.1rem;
+  font-weight: 700; color: var(--amber);
+}
+.match-timer.urgent { color: var(--loss); animation: timerPulse 1s ease-in-out infinite; }
+@keyframes timerPulse { 50% { opacity: 0.5; } }
+.match-balance {
+  display: flex; flex-direction: column; align-items: flex-end;
+  font-family: var(--font-mono);
+}
+
+.match-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1rem;
+}
+
+/* Match stocks panel */
+.match-stocks-panel {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 1rem;
+}
+.match-stocks-panel h3 {
+  font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;
+}
+.match-stock-row {
+  display: grid;
+  grid-template-columns: 60px 1fr auto auto;
+  align-items: center; gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-sm); cursor: pointer; transition: background 0.15s;
+  border-bottom: 1px solid var(--border);
+}
+.match-stock-row:last-child { border-bottom: none; }
+.match-stock-row:hover { background: var(--bg-card-hover); }
+.match-stock-row.selected { background: var(--blue-bg); border-color: rgba(59,130,246,0.2); }
+
+/* Match trade panel */
+.match-trade-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.match-trade-header h4 {
+  font-family: var(--font-mono); font-size: 0.85rem;
+  font-weight: 700; color: var(--text-primary);
+}
+.match-trade-info {
+  display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-size: 0.78rem;
+  margin-bottom: 0.5rem;
+}
+.match-trade-form {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+  padding-top: 0.5rem; border-top: 1px solid var(--border);
+}
+.match-trade-form input {
+  width: 80px; padding: 0.45rem 0.6rem;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-family: var(--font-mono); font-size: 0.85rem;
+}
+.match-trade-form input:focus { outline: none; border-color: var(--border-focus); }
+.match-trade-btns { display: flex; gap: 0.35rem; }
+
+/* Match sidebar */
+.match-sidebar { display: flex; flex-direction: column; gap: 1rem; }
+.match-rankings-card, .match-portfolio-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 1rem;
+}
+.match-rankings-card h3, .match-portfolio-card h3 {
+  font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;
+}
+
+.match-rank-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.4rem 0.5rem; border-radius: var(--radius-sm);
+  margin-bottom: 0.2rem;
+}
+.match-rank-row.is-me { background: var(--blue-bg); }
+.match-rank-pos {
+  font-family: var(--font-mono); font-weight: 700; font-size: 0.82rem;
+  width: 28px; text-align: center;
+}
+.match-rank-pos.gold { color: #fbbf24; }
+.match-rank-pos.silver { color: #cbd5e1; }
+.match-rank-pos.bronze { color: #d97706; }
+.match-rank-name { flex: 1; font-size: 0.82rem; font-weight: 500; }
+.match-rank-worth {
+  font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600;
+}
+
+.match-holding-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.35rem 0; border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+}
+.match-holding-row:last-child { border-bottom: none; }
+
+/* Post-game results */
+.results-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 2rem;
+  text-align: center; margin-bottom: 1.5rem;
+}
+.results-card h2 { font-size: 1.6rem; font-weight: 800; margin-bottom: 0.5rem; }
+.results-placement {
+  font-size: 3rem; margin-bottom: 0.5rem; display: block;
+}
+.results-table {
+  width: 100%; border-collapse: collapse; margin-top: 1rem;
+}
+.results-table th {
+  font-size: 0.7rem; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 0.6rem 0.75rem; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.results-table td {
+  padding: 0.65rem 0.75rem; font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+}
+.results-table tr.is-me { background: var(--blue-bg); }
+.results-table .rank-cell { font-weight: 700; text-align: center; }
+.results-reward { color: var(--amber); font-weight: 600; }
+.results-xp { color: var(--blue); font-weight: 600; }
+
+/* ============================================================
+   GLOBAL CHAT PANEL
+   ============================================================ */
+.chat-panel {
+  position: fixed; bottom: 0; right: 1.5rem;
+  width: 340px; z-index: 500;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  box-shadow: var(--shadow-lg);
+}
+.chat-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.65rem 1rem; cursor: pointer;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.chat-header-left {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.82rem; font-weight: 600; color: var(--text-primary);
+}
+.chat-badge {
+  background: var(--loss); color: white;
+  font-size: 0.65rem; font-weight: 700;
+  padding: 0.1rem 0.4rem; border-radius: 10px;
+  font-family: var(--font-mono);
+}
+.chat-chevron { transition: transform 0.2s; color: var(--text-muted); }
+.chat-panel.open .chat-chevron { transform: rotate(180deg); }
+
+.chat-body { border-top: none; }
+.chat-messages {
+  height: 280px; overflow-y: auto;
+  padding: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;
+}
+.chat-msg {
+  padding: 0.35rem 0.6rem; border-radius: var(--radius-sm);
+  font-size: 0.8rem; line-height: 1.4;
+  animation: fadeIn 0.2s ease;
+}
+.chat-msg-user {
+  font-weight: 600; color: var(--blue); font-size: 0.75rem;
+}
+.chat-msg-level {
+  font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-dim);
+  margin-left: 0.25rem;
+}
+.chat-msg-text { color: var(--text-primary); margin-top: 0.1rem; }
+.chat-msg-time {
+  font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-dim);
+  float: right; margin-top: 0.15rem;
+}
+
+.chat-input-row {
+  display: flex; gap: 0.4rem;
+  padding: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+.chat-input-row input {
+  flex: 1; padding: 0.5rem 0.75rem;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-size: 0.82rem; font-family: var(--font-display);
+}
+.chat-input-row input:focus { outline: none; border-color: var(--border-focus); }
+.chat-send-btn {
+  background: var(--blue); color: white; border: none;
+  border-radius: var(--radius-sm); padding: 0.5rem 0.65rem;
+  cursor: pointer; display: flex; align-items: center;
+  transition: all 0.15s;
+}
+.chat-send-btn:hover { background: #2563eb; }
+
+/* ============================================================
+   XP BAR (in nav and profile)
+   ============================================================ */
+.xp-bar-track {
+  width: 100%; height: 4px; background: var(--border);
+  border-radius: 2px; overflow: hidden; margin-top: 0.2rem;
+}
+.xp-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--blue), var(--purple));
+  border-radius: 2px; transition: width 0.5s ease;
+}
+.nav-xp-container {
+  display: flex; flex-direction: column; align-items: flex-end;
+  min-width: 80px;
+}
+.nav-xp-text {
+  font-family: var(--font-mono); font-size: 0.6rem;
+  color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+/* ============================================================
+   RESPONSIVE — LOBBY & CHAT
+   ============================================================ */
+@media (max-width: 900px) {
+  .match-layout { grid-template-columns: 1fr; }
+  .lobby-card { grid-template-columns: 1fr auto auto; }
+  .lobby-card-reward { display: none; }
+  .create-form-row { grid-template-columns: 1fr; }
+  .chat-panel { right: 0; left: 0; width: 100%; border-radius: 0; }
+}
+@media (max-width: 600px) {
+  .lobby-card { grid-template-columns: 1fr auto; }
+  .lobby-card-meta { display: none; }
 }

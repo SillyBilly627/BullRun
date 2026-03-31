@@ -154,6 +154,64 @@ const API = (() => {
     return get('config/chat-status');
   }
 
+  // ---- LOBBY ENDPOINTS ----
+  async function getLobbies() {
+    return get('lobbies');
+  }
+
+  async function getMyActiveLobby() {
+    return get('lobbies/my-active');
+  }
+
+  async function createLobby(settings) {
+    return post('lobbies/create', settings);
+  }
+
+  async function getLobbyDetails(lobbyId) {
+    return get(`lobbies/${lobbyId}`);
+  }
+
+  async function joinLobby(lobbyId) {
+    return post('lobbies/join', { lobbyId });
+  }
+
+  async function leaveLobby(lobbyId) {
+    return post('lobbies/leave', { lobbyId });
+  }
+
+  async function startLobby(lobbyId) {
+    return post('lobbies/start', { lobbyId });
+  }
+
+  async function lobbyTick(lobbyId) {
+    return get(`lobbies/tick?lobbyId=${lobbyId}`);
+  }
+
+  async function lobbyBuy(lobbyId, stockId, shares) {
+    return post('lobbies/buy', { lobbyId, stockId, shares });
+  }
+
+  async function lobbySell(lobbyId, stockId, shares) {
+    return post('lobbies/sell', { lobbyId, stockId, shares });
+  }
+
+  async function getLobbyPortfolio(lobbyId) {
+    return get(`lobbies/portfolio?lobbyId=${lobbyId}`);
+  }
+
+  async function getLobbyResults(lobbyId) {
+    return get(`lobbies/results/${lobbyId}`);
+  }
+
+  // ---- CHAT ENDPOINTS ----
+  async function getChatMessages(since) {
+    return get(`chat/messages${since ? '?since=' + encodeURIComponent(since) : ''}`);
+  }
+
+  async function sendChatMessage(message) {
+    return post('chat/send', { message });
+  }
+
   // Public interface
   return {
     getToken, setToken,
@@ -163,5 +221,11 @@ const API = (() => {
     getLeaderboard, getProfile,
     getAnnouncements, getChatStatus,
     pollTick, getWatchlist, toggleWatchlist,
+    // Lobbies
+    getLobbies, getMyActiveLobby, createLobby, getLobbyDetails,
+    joinLobby, leaveLobby, startLobby, lobbyTick,
+    lobbyBuy, lobbySell, getLobbyPortfolio, getLobbyResults,
+    // Chat
+    getChatMessages, sendChatMessage,
   };
 })();
