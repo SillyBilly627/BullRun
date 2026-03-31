@@ -1,0 +1,28 @@
+# ============================================================
+# BullRun — Cloudflare Pages + Functions Configuration
+# ============================================================
+# This file tells Cloudflare how to connect your database (D1)
+# and session store (KV) to your backend functions.
+# ============================================================
+
+name = "bullrun"
+compatibility_date = "2024-01-01"
+
+# ------------------------------------
+# D1 Database (stores players, stocks, etc.)
+# ------------------------------------
+# After creating your D1 database, replace the placeholder
+# database_id below with your real one.
+[[d1_databases]]
+binding = "DB"
+database_name = "bullrun-db"
+database_id = "YOUR_D1_DATABASE_ID_HERE"
+
+# ------------------------------------
+# KV Namespace (stores login sessions)
+# ------------------------------------
+# After creating your KV namespace, replace the placeholder
+# id below with your real one.
+[[kv_namespaces]]
+binding = "SESSION_STORE"
+id = "YOUR_KV_NAMESPACE_ID_HERE"

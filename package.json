@@ -1,0 +1,15 @@
+{
+  "name": "bullrun",
+  "version": "1.0.0",
+  "description": "BullRun — Multiplayer Stock Market Simulation Game",
+  "private": true,
+  "scripts": {
+    "dev": "npx wrangler pages dev ./public --d1 DB --kv SESSION_STORE --port 8788",
+    "deploy": "npx wrangler pages deploy ./public --project-name bullrun",
+    "db:migrate:local": "npx wrangler d1 execute DB --local --file=./migrations/0001_initial.sql",
+    "db:migrate:remote": "npx wrangler d1 execute DB --remote --file=./migrations/0001_initial.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

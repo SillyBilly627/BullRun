@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Wrangler local dev files
+.wrangler/
+.dev.vars
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+
+# Build output
+dist/

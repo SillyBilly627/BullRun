@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BullRun — Stock Market Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- ============================== -->
+  <!-- LOADING SCREEN (shown on load) -->
+  <!-- ============================== -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="loading-content">
+      <div class="loading-logo">
+        <span class="logo-bull">BULL</span><span class="logo-run">RUN</span>
+      </div>
+      <div class="loading-bar-track">
+        <div class="loading-bar-fill"></div>
+      </div>
+      <p class="loading-text">Connecting to markets...</p>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- AUTH SCREEN (login / signup)   -->
+  <!-- ============================== -->
+  <div id="auth-screen" class="screen" style="display:none;">
+    <div class="auth-container">
+      <!-- Background decoration -->
+      <div class="auth-bg-grid"></div>
+      <div class="auth-bg-glow"></div>
+
+      <div class="auth-card">
+        <div class="auth-logo">
+          <span class="logo-bull">BULL</span><span class="logo-run">RUN</span>
+        </div>
+        <p class="auth-subtitle">Stock Market Simulator</p>
+
+        <!-- Login Form -->
+        <div id="login-form" class="auth-form">
+          <h2>Welcome back</h2>
+          <div class="input-group">
+            <label for="login-username">Username</label>
+            <input type="text" id="login-username" placeholder="Enter username" autocomplete="username" maxlength="20">
+          </div>
+          <div class="input-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Enter password" autocomplete="current-password">
+          </div>
+          <div id="login-error" class="error-message"></div>
+          <button id="login-btn" class="btn btn-primary btn-full" onclick="Auth.login()">
+            <span>Sign In</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+          <p class="auth-switch">Don't have an account? <a href="#" onclick="Auth.showSignup(); return false;">Create one</a></p>
+        </div>
+
+        <!-- Signup Form -->
+        <div id="signup-form" class="auth-form" style="display:none;">
+          <h2>Create account</h2>
+          <div class="input-group">
+            <label for="signup-username">Username</label>
+            <input type="text" id="signup-username" placeholder="Choose a username" autocomplete="username" maxlength="20">
+            <span class="input-hint">Letters, numbers, underscores only</span>
+          </div>
+          <div class="input-group">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" placeholder="Create a password" autocomplete="new-password">
+            <span class="input-hint">Min 4 chars, 1 capital, 1 number</span>
+          </div>
+          <div class="input-group">
+            <label for="signup-confirm">Confirm Password</label>
+            <input type="password" id="signup-confirm" placeholder="Confirm your password" autocomplete="new-password">
+          </div>
+          <div id="signup-error" class="error-message"></div>
+          <button id="signup-btn" class="btn btn-primary btn-full" onclick="Auth.signup()">
+            <span>Create Account</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <p class="auth-switch">Already have an account? <a href="#" onclick="Auth.showLogin(); return false;">Sign in</a></p>
+        </div>
+      </div>
+
+      <p class="auth-footer">A school project — simulated trading with fake money</p>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- MAIN APP (after login)         -->
+  <!-- ============================== -->
+  <div id="app-screen" class="screen" style="display:none;">
+
+    <!-- Announcement Banner -->
+    <div id="announcement-banner" class="announcement-banner" style="display:none;">
+      <div class="announcement-content">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        <span id="announcement-text"></span>
+        <button class="announcement-close" onclick="App.dismissAnnouncement()">×</button>
+      </div>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <nav class="top-nav">
+      <div class="nav-left">
+        <div class="nav-logo" onclick="App.navigate('home')">
+          <span class="logo-bull">BULL</span><span class="logo-run">RUN</span>
+        </div>
+      </div>
+      <div class="nav-center">
+        <button class="nav-tab active" data-page="home" onclick="App.navigate('home')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          <span>Home</span>
+        </button>
+        <button class="nav-tab" data-page="market" onclick="App.navigate('market')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span>Market</span>
+        </button>
+        <button class="nav-tab" data-page="portfolio" onclick="App.navigate('portfolio')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+          <span>Portfolio</span>
+        </button>
+        <button class="nav-tab" data-page="lobbies" onclick="App.navigate('lobbies')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          <span>Lobbies</span>
+        </button>
+        <button class="nav-tab" data-page="leaderboard" onclick="App.navigate('leaderboard')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 010-5C7 4 6 9 6 9zm12 0h1.5a2.5 2.5 0 000-5C17 4 18 9 18 9zm-1 0c0 4-2.5 6-5 8-2.5-2-5-4-5-8a5 5 0 0110 0z"/></svg>
+          <span>Rankings</span>
+        </button>
+      </div>
+      <div class="nav-right">
+        <div class="nav-money" id="nav-money">
+          <span class="money-label">Cash</span>
+          <span class="money-value" id="nav-money-value">$10,000.00</span>
+        </div>
+        <div class="nav-level" id="nav-level">
+          <span class="level-badge">Lv <span id="nav-level-value">1</span></span>
+        </div>
+        <button class="nav-profile-btn" onclick="App.navigate('profile')" title="Your Profile">
+          <span id="nav-username">Player</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+        <button class="nav-logout-btn" onclick="Auth.logout()" title="Sign Out">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Page Content Area -->
+    <main class="page-content" id="page-content">
+
+      <!-- HOME PAGE -->
+      <div id="page-home" class="page active">
+        <div class="home-grid">
+          <!-- Welcome Card -->
+          <div class="card card-welcome">
+            <div class="welcome-header">
+              <h1>Welcome back, <span id="home-username">Player</span></h1>
+              <p class="welcome-subtitle" id="home-subtitle">Ready to make some moves?</p>
+            </div>
+            <div class="welcome-stats">
+              <div class="stat-item">
+                <span class="stat-label">Net Worth</span>
+                <span class="stat-value" id="home-networth">$10,000.00</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Cash</span>
+                <span class="stat-value" id="home-cash">$10,000.00</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Level</span>
+                <span class="stat-value" id="home-level">1</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">XP</span>
+                <span class="stat-value" id="home-xp">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="card card-actions">
+            <h3>Quick Actions</h3>
+            <div class="action-grid">
+              <button class="action-btn" onclick="App.navigate('market')">
+                <div class="action-icon gain">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </div>
+                <span>Open Market</span>
+              </button>
+              <button class="action-btn" onclick="App.navigate('lobbies')">
+                <div class="action-icon warn">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+                </div>
+                <span>Join Lobby</span>
+              </button>
+              <button class="action-btn" onclick="App.navigate('portfolio')">
+                <div class="action-icon info">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+                </div>
+                <span>Portfolio</span>
+              </button>
+              <button class="action-btn" onclick="App.navigate('leaderboard')">
+                <div class="action-icon legendary">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 010-5C7 4 6 9 6 9zm12 0h1.5a2.5 2.5 0 000-5C17 4 18 9 18 9zm-1 0c0 4-2.5 6-5 8-2.5-2-5-4-5-8a5 5 0 0110 0z"/></svg>
+                </div>
+                <span>Rankings</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Market Movers (top gainers/losers) -->
+          <div class="card card-movers">
+            <h3>Market Movers</h3>
+            <div class="movers-grid" id="home-movers">
+              <p class="placeholder-text">Loading market data...</p>
+            </div>
+          </div>
+
+          <!-- Your Holdings Summary -->
+          <div class="card card-holdings">
+            <h3>Your Holdings</h3>
+            <div id="home-holdings">
+              <p class="placeholder-text">Loading...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MARKET PAGE -->
+      <div id="page-market" class="page">
+        <div class="market-header">
+          <h2>Open Market</h2>
+          <div class="market-search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="text" id="stock-search" placeholder="Search stocks..." oninput="Market.filterStocks(this.value)">
+          </div>
+        </div>
+        <div class="market-tip" id="market-tip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <span>Tip: In real markets, stock prices change based on supply and demand. Here, prices also react to what players buy and sell!</span>
+        </div>
+        <div class="stock-list" id="stock-list">
+          <p class="placeholder-text">Loading stocks...</p>
+        </div>
+      </div>
+
+      <!-- PORTFOLIO PAGE -->
+      <div id="page-portfolio" class="page">
+        <h2>Your Portfolio</h2>
+        <div class="portfolio-summary" id="portfolio-summary">
+          <div class="summary-cards">
+            <div class="summary-card">
+              <span class="summary-label">Cash Balance</span>
+              <span class="summary-value" id="portfolio-cash">$0.00</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">Holdings Value</span>
+              <span class="summary-value" id="portfolio-holdings-value">$0.00</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">Total Net Worth</span>
+              <span class="summary-value" id="portfolio-networth">$0.00</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">Profit/Loss</span>
+              <span class="summary-value" id="portfolio-pnl">$0.00</span>
+            </div>
+          </div>
+        </div>
+        <div class="portfolio-holdings" id="portfolio-holdings">
+          <p class="placeholder-text">Loading portfolio...</p>
+        </div>
+      </div>
+
+      <!-- LOBBIES PAGE (placeholder for Phase 3) -->
+      <div id="page-lobbies" class="page">
+        <h2>Closed Lobbies</h2>
+        <div class="coming-soon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <h3>Coming Soon</h3>
+          <p>Competitive lobby matches are being built. Stay tuned!</p>
+        </div>
+      </div>
+
+      <!-- LEADERBOARD PAGE -->
+      <div id="page-leaderboard" class="page">
+        <h2>Rankings</h2>
+        <div class="leaderboard-tabs">
+          <button class="lb-tab active" onclick="Leaderboard.show('weekly')">Weekly Money</button>
+          <button class="lb-tab" onclick="Leaderboard.show('alltime')">All-Time</button>
+          <button class="lb-tab" onclick="Leaderboard.show('level')">Level</button>
+        </div>
+        <div class="leaderboard-list" id="leaderboard-list">
+          <p class="placeholder-text">Loading rankings...</p>
+        </div>
+      </div>
+
+      <!-- PROFILE PAGE -->
+      <div id="page-profile" class="page">
+        <div class="profile-container" id="profile-container">
+          <p class="placeholder-text">Loading profile...</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============================== -->
+  <!-- STOCK DETAIL MODAL             -->
+  <!-- ============================== -->
+  <div id="stock-modal" class="modal" style="display:none;">
+    <div class="modal-overlay" onclick="Market.closeModal()"></div>
+    <div class="modal-content stock-detail">
+      <button class="modal-close" onclick="Market.closeModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <div id="stock-detail-content">
+        <p class="placeholder-text">Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- TOAST NOTIFICATIONS            -->
+  <!-- ============================== -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
