@@ -393,12 +393,15 @@ export async function onRequest(context) {
       const stock = await env.DB.prepare('SELECT * FROM stocks WHERE id = ? AND is_active = 1').bind(stockId).first();
       if (!stock) return jsonResponse({ error: 'Stock not found' }, 404);
 
-      // Get price history (configurable limit, default 100)
-      const historyLimit = parseInt(url.searchParams.get('limit') || '100');
-      const clampedLimit = Math.min(Math.max(historyLimit, 10), 1000); // between 10 and 1000
+      // Get price history filtered by time range (in minutes)
+      const minutes = parseInt(url.searchParams.get('minutes') || '60');
+      const clampedMinutes = Math.min(Math.max(minutes, 5), 1440); // 5 min to 24 hours
       const history = await env.DB.prepare(
-        'SELECT price, open_price, high_price, low_price, close_price, volume, timestamp FROM stock_history WHERE stock_id = ? ORDER BY timestamp DESC LIMIT ?'
-      ).bind(stockId, clampedLimit).all();
+        `SELECT price, open_price, high_price, low_price, close_price, volume, timestamp
+         FROM stock_history
+         WHERE stock_id = ? AND timestamp >= datetime('now', '-' || ? || ' minutes')
+         ORDER BY timestamp ASC`
+      ).bind(stockId, clampedMinutes).all();
 
       // Get user's holdings for this stock
       const holding = await env.DB.prepare(
@@ -407,7 +410,7 @@ export async function onRequest(context) {
 
       return jsonResponse({
         stock,
-        history: history.results.reverse(), // oldest first for charting
+        history: history.results, // already ordered oldest-first (ASC)
         holding: holding || { shares: 0, avg_buy_price: 0 }
       });
     }

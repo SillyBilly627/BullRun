@@ -215,7 +215,7 @@ const Market = (() => {
   let currentChartType = 'line'; // 'line' or 'candle'
   let currentDetailStockId = null;
   let currentDetailHistory = []; // Store history so we can redraw without refetching
-  let currentHistoryLimit = 50;  // Default number of candles to show
+  let currentHistoryMinutes = 60; // Default time range in minutes
 
   async function load() {
     const res = await API.getStocks();
@@ -406,40 +406,68 @@ const Market = (() => {
   }
 
   // --- STOCK DETAIL MODAL ---
+  // Opens instantly with cached stock info, then loads chart + holdings async
   async function openDetail(stockId, preserveSettings = false) {
     currentDetailStockId = stockId;
     if (!preserveSettings) {
       currentChartType = 'line';
-      currentHistoryLimit = 50;
+      currentHistoryMinutes = 60;
     }
     const modal = document.getElementById('stock-modal');
     const content = document.getElementById('stock-detail-content');
     modal.style.display = 'flex';
-    content.innerHTML = '<p class="placeholder-text">Loading stock data...</p>';
 
-    const res = await API.getStockDetail(stockId, currentHistoryLimit);
+    // Instantly show basic info from cached stock data (no network wait)
+    const cached = allStocks.find(s => s.id === stockId);
+    if (cached) {
+      const pct = cached.previous_price > 0 ? ((cached.current_price - cached.previous_price) / cached.previous_price * 100) : 0;
+      const dir = changeClass(cached.current_price, cached.previous_price);
+      const pinned = watchlistIds.has(cached.id);
+      renderDetailModal(cached, [], { shares: 0, avg_buy_price: 0 }, pinned, true);
+    } else {
+      content.innerHTML = '<p class="placeholder-text">Loading...</p>';
+    }
+
+    // Fetch full detail (history + holdings) in the background
+    const res = await API.getStockDetail(stockId, currentHistoryMinutes);
     if (!res.ok) {
       content.innerHTML = `<p class="error-message">${res.data.error || 'Failed to load stock'}</p>`;
       return;
     }
+    // Make sure user hasn't closed or switched stock while we were loading
+    if (currentDetailStockId !== stockId) return;
 
     const { stock, history, holding } = res.data;
-    currentDetailHistory = history; // Save for chart redraw
+    currentDetailHistory = history;
+    const pinned = watchlistIds.has(stock.id);
+    renderDetailModal(stock, history, holding, pinned, false);
+  }
+
+  // Renders the full detail modal content
+  function renderDetailModal(stock, history, holding, pinned, isLoading) {
+    const content = document.getElementById('stock-detail-content');
     const pct = stock.previous_price > 0 ? ((stock.current_price - stock.previous_price) / stock.previous_price * 100) : 0;
     const dir = changeClass(stock.current_price, stock.previous_price);
     const basePct = stock.base_price > 0 ? ((stock.current_price - stock.base_price) / stock.base_price * 100) : 0;
-    const pinned = watchlistIds.has(stock.id);
+
+    const rangeButtons = [
+      { mins: 30, label: '30m' },
+      { mins: 60, label: '1h' },
+      { mins: 360, label: '6h' },
+      { mins: 720, label: '12h' },
+      { mins: 1440, label: '24h' },
+    ];
 
     content.innerHTML = `
       <div class="stock-detail-header">
         <div class="sd-left">
           <h2>${stock.name}</h2>
-          <span class="sd-symbol">${stock.symbol} · ${stock.sector}</span>
+          <span class="sd-symbol">${stock.symbol}${stock.sector ? ' · ' + stock.sector : ''}</span>
         </div>
         <div style="text-align:right;">
           <div class="sd-price">${formatMoney(stock.current_price)}</div>
           <div class="sd-price-change ${dir === 'up' ? 'text-gain' : dir === 'down' ? 'text-loss' : 'text-muted'}">
-            ${formatPercent(pct)} today · ${formatPercent(basePct)} this week
+            ${formatPercent(pct)} today${basePct !== undefined ? ' · ' + formatPercent(basePct) + ' this week' : ''}
           </div>
         </div>
       </div>
@@ -450,11 +478,9 @@ const Market = (() => {
           <button class="chart-toggle-btn ${currentChartType === 'candle' ? 'active' : ''}" id="btn-candle" onclick="Market.setChartType('candle')">Candlestick</button>
         </div>
         <div class="chart-controls-center">
-          <button class="range-btn ${currentHistoryLimit === 25 ? 'active' : ''}" onclick="Market.setHistoryRange(25)">25</button>
-          <button class="range-btn ${currentHistoryLimit === 50 ? 'active' : ''}" onclick="Market.setHistoryRange(50)">50</button>
-          <button class="range-btn ${currentHistoryLimit === 100 ? 'active' : ''}" onclick="Market.setHistoryRange(100)">100</button>
-          <button class="range-btn ${currentHistoryLimit === 250 ? 'active' : ''}" onclick="Market.setHistoryRange(250)">250</button>
-          <button class="range-btn ${currentHistoryLimit === 1000 ? 'active' : ''}" onclick="Market.setHistoryRange(1000)">All</button>
+          ${rangeButtons.map(r => `
+            <button class="range-btn ${currentHistoryMinutes === r.mins ? 'active' : ''}" onclick="Market.setHistoryRange(${r.mins})">${r.label}</button>
+          `).join('')}
         </div>
         <button class="pin-btn-lg ${pinned ? 'pinned' : ''}" onclick="Market.togglePin(${stock.id})" title="${pinned ? 'Unpin' : 'Pin to watchlist'}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="${pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -463,9 +489,11 @@ const Market = (() => {
       </div>
 
       <div class="chart-container" id="stock-chart">
-        ${history.length > 1
-          ? '<canvas id="stock-chart-canvas" style="width:100%;height:100%;"></canvas>'
-          : '<span>Waiting for price data — prices update every 30 seconds</span>'
+        ${isLoading
+          ? '<span class="placeholder-text">Loading chart...</span>'
+          : history.length > 1
+            ? '<canvas id="stock-chart-canvas" style="width:100%;height:100%;"></canvas>'
+            : '<span>Waiting for price data — prices update every 30 seconds</span>'
         }
       </div>
 
@@ -514,8 +542,8 @@ const Market = (() => {
       </div>
     `;
 
-    // Draw chart if we have history
-    if (history.length > 1) {
+    // Draw chart if we have history and not in loading state
+    if (!isLoading && history.length > 1) {
       drawChart('stock-chart-canvas', history, currentChartType);
     }
   }
@@ -570,12 +598,12 @@ const Market = (() => {
     currentDetailStockId = null;
     currentDetailHistory = [];
     currentChartType = 'line';
-    currentHistoryLimit = 50;
+    currentHistoryMinutes = 60;
   }
 
-  function setHistoryRange(limit) {
-    currentHistoryLimit = limit;
-    // Refetch with new limit, preserving chart type
+  function setHistoryRange(minutes) {
+    currentHistoryMinutes = minutes;
+    // Refetch with new time range, preserving chart type
     if (currentDetailStockId) openDetail(currentDetailStockId, true);
   }
 
