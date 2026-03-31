@@ -99,8 +99,8 @@ const API = (() => {
     return get('stocks');
   }
 
-  async function getStockDetail(stockId) {
-    return get(`stocks/${stockId}`);
+  async function getStockDetail(stockId, limit = 100) {
+    return get(`stocks/${stockId}?limit=${limit}`);
   }
 
   async function buyStock(stockId, shares) {

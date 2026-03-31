@@ -393,10 +393,12 @@ export async function onRequest(context) {
       const stock = await env.DB.prepare('SELECT * FROM stocks WHERE id = ? AND is_active = 1').bind(stockId).first();
       if (!stock) return jsonResponse({ error: 'Stock not found' }, 404);
 
-      // Get price history (last 100 entries)
+      // Get price history (configurable limit, default 100)
+      const historyLimit = parseInt(url.searchParams.get('limit') || '100');
+      const clampedLimit = Math.min(Math.max(historyLimit, 10), 1000); // between 10 and 1000
       const history = await env.DB.prepare(
-        'SELECT price, open_price, high_price, low_price, close_price, volume, timestamp FROM stock_history WHERE stock_id = ? ORDER BY timestamp DESC LIMIT 100'
-      ).bind(stockId).all();
+        'SELECT price, open_price, high_price, low_price, close_price, volume, timestamp FROM stock_history WHERE stock_id = ? ORDER BY timestamp DESC LIMIT ?'
+      ).bind(stockId, clampedLimit).all();
 
       // Get user's holdings for this stock
       const holding = await env.DB.prepare(
@@ -723,20 +725,31 @@ export async function onRequest(context) {
     // WATCHLIST
     // ======================================
 
-    // --- GET USER'S WATCHLIST ---
+    // --- GET USER'S WATCHLIST WITH MINI CHART DATA ---
     if (path === 'watchlist' && method === 'GET') {
       const user = await getSessionUser(request, env);
       if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
 
       const watchlist = await env.DB.prepare(`
-        SELECT s.id, s.symbol, s.name, s.sector, s.current_price, s.previous_price
+        SELECT s.id, s.symbol, s.name, s.sector, s.current_price, s.previous_price, s.base_price
         FROM watchlist w
         JOIN stocks s ON w.stock_id = s.id
         WHERE w.user_id = ?
         ORDER BY s.symbol
       `).bind(user.id).all();
 
-      return jsonResponse({ watchlist: watchlist.results });
+      // Fetch mini price history (last 20 points) for each watchlist stock
+      const withSparklines = await Promise.all(watchlist.results.map(async (stock) => {
+        const hist = await env.DB.prepare(
+          'SELECT close_price FROM stock_history WHERE stock_id = ? ORDER BY timestamp DESC LIMIT 20'
+        ).bind(stock.id).all();
+        return {
+          ...stock,
+          sparkline: hist.results.map(h => h.close_price).reverse()
+        };
+      }));
+
+      return jsonResponse({ watchlist: withSparklines });
     }
 
     // --- ADD/REMOVE FROM WATCHLIST ---

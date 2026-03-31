@@ -215,6 +215,7 @@ const Market = (() => {
   let currentChartType = 'line'; // 'line' or 'candle'
   let currentDetailStockId = null;
   let currentDetailHistory = []; // Store history so we can redraw without refetching
+  let currentHistoryLimit = 50;  // Default number of candles to show
 
   async function load() {
     const res = await API.getStocks();
@@ -310,22 +311,80 @@ const Market = (() => {
   // --- WATCHLIST ---
   function renderWatchlist(watchlist) {
     const el = document.getElementById('watchlist-panel');
+    const container = document.getElementById('watchlist-container');
     if (!el) return;
     if (watchlist.length === 0) {
+      if (container) container.style.display = 'none';
       el.innerHTML = '<p class="placeholder-text" style="padding:0.75rem;">Pin stocks with the ★ icon to track them here</p>';
       return;
     }
-    el.innerHTML = watchlist.map(s => {
+    if (container) container.style.display = 'block';
+    el.innerHTML = watchlist.map((s, idx) => {
       const pct = s.previous_price > 0 ? ((s.current_price - s.previous_price) / s.previous_price * 100) : 0;
       const dir = changeClass(s.current_price, s.previous_price);
+      const weekPct = s.base_price > 0 ? ((s.current_price - s.base_price) / s.base_price * 100) : 0;
       return `
         <div class="watchlist-item" onclick="Market.openDetail(${s.id})">
-          <span class="wl-symbol">${s.symbol}</span>
-          <span class="wl-price">${formatMoney(s.current_price)}</span>
-          <span class="wl-change ${dir}">${formatPercent(pct)}</span>
+          <div class="wl-top">
+            <span class="wl-symbol">${s.symbol}</span>
+            <span class="wl-change ${dir}">${formatPercent(pct)}</span>
+          </div>
+          <canvas class="wl-sparkline" id="wl-spark-${idx}" width="120" height="36"></canvas>
+          <div class="wl-bottom">
+            <span class="wl-price">${formatMoney(s.current_price)}</span>
+            <span class="wl-week ${weekPct >= 0 ? 'text-gain' : 'text-loss'}" style="font-size:0.6rem;">wk ${formatPercent(weekPct)}</span>
+          </div>
         </div>
       `;
     }).join('');
+
+    // Draw mini sparklines after HTML is rendered
+    requestAnimationFrame(() => {
+      watchlist.forEach((s, idx) => {
+        if (s.sparkline && s.sparkline.length > 1) {
+          drawSparkline(`wl-spark-${idx}`, s.sparkline);
+        }
+      });
+    });
+  }
+
+  // Draw a tiny sparkline chart on a small canvas
+  function drawSparkline(canvasId, data) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || data.length < 2) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const pad = 2;
+
+    const min = Math.min(...data) * 0.999;
+    const max = Math.max(...data) * 1.001;
+    const range = max - min || 1;
+
+    const isUp = data[data.length - 1] >= data[0];
+    const color = isUp ? '#22c55e' : '#ef4444';
+    const fillColor = isUp ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
+
+    const points = data.map((val, i) => ({
+      x: pad + (i / (data.length - 1)) * (w - pad * 2),
+      y: pad + (h - pad * 2) - ((val - min) / range) * (h - pad * 2),
+    }));
+
+    // Fill area
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, h);
+    points.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(points[points.length - 1].x, h);
+    ctx.closePath();
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    // Draw line
+    ctx.beginPath();
+    points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
   }
 
   async function togglePin(stockId) {
@@ -347,15 +406,18 @@ const Market = (() => {
   }
 
   // --- STOCK DETAIL MODAL ---
-  async function openDetail(stockId) {
+  async function openDetail(stockId, preserveSettings = false) {
     currentDetailStockId = stockId;
-    currentChartType = 'line'; // Reset to line on open
+    if (!preserveSettings) {
+      currentChartType = 'line';
+      currentHistoryLimit = 50;
+    }
     const modal = document.getElementById('stock-modal');
     const content = document.getElementById('stock-detail-content');
     modal.style.display = 'flex';
     content.innerHTML = '<p class="placeholder-text">Loading stock data...</p>';
 
-    const res = await API.getStockDetail(stockId);
+    const res = await API.getStockDetail(stockId, currentHistoryLimit);
     if (!res.ok) {
       content.innerHTML = `<p class="error-message">${res.data.error || 'Failed to load stock'}</p>`;
       return;
@@ -383,8 +445,17 @@ const Market = (() => {
       </div>
 
       <div class="chart-controls">
-        <button class="chart-toggle-btn active" id="btn-line" onclick="Market.setChartType('line')">Line</button>
-        <button class="chart-toggle-btn" id="btn-candle" onclick="Market.setChartType('candle')">Candlestick</button>
+        <div class="chart-controls-left">
+          <button class="chart-toggle-btn ${currentChartType === 'line' ? 'active' : ''}" id="btn-line" onclick="Market.setChartType('line')">Line</button>
+          <button class="chart-toggle-btn ${currentChartType === 'candle' ? 'active' : ''}" id="btn-candle" onclick="Market.setChartType('candle')">Candlestick</button>
+        </div>
+        <div class="chart-controls-center">
+          <button class="range-btn ${currentHistoryLimit === 25 ? 'active' : ''}" onclick="Market.setHistoryRange(25)">25</button>
+          <button class="range-btn ${currentHistoryLimit === 50 ? 'active' : ''}" onclick="Market.setHistoryRange(50)">50</button>
+          <button class="range-btn ${currentHistoryLimit === 100 ? 'active' : ''}" onclick="Market.setHistoryRange(100)">100</button>
+          <button class="range-btn ${currentHistoryLimit === 250 ? 'active' : ''}" onclick="Market.setHistoryRange(250)">250</button>
+          <button class="range-btn ${currentHistoryLimit === 1000 ? 'active' : ''}" onclick="Market.setHistoryRange(1000)">All</button>
+        </div>
         <button class="pin-btn-lg ${pinned ? 'pinned' : ''}" onclick="Market.togglePin(${stock.id})" title="${pinned ? 'Unpin' : 'Pin to watchlist'}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="${pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           ${pinned ? 'Pinned' : 'Pin'}
@@ -499,6 +570,13 @@ const Market = (() => {
     currentDetailStockId = null;
     currentDetailHistory = [];
     currentChartType = 'line';
+    currentHistoryLimit = 50;
+  }
+
+  function setHistoryRange(limit) {
+    currentHistoryLimit = limit;
+    // Refetch with new limit, preserving chart type
+    if (currentDetailStockId) openDetail(currentDetailStockId, true);
   }
 
   // --- RANDOM EDUCATIONAL TIPS ---
@@ -681,7 +759,7 @@ const Market = (() => {
     });
   }
 
-  return { load, filterStocks, openDetail, closeModal, updateTradeTotal, executeTrade, togglePin, setChartType, startPolling, stopPolling };
+  return { load, filterStocks, openDetail, closeModal, updateTradeTotal, executeTrade, togglePin, setChartType, setHistoryRange, startPolling, stopPolling };
 })();
 
 // ============================================================
