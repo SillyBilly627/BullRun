@@ -2,16 +2,23 @@
 
 A multiplayer stock market simulator where players trade simulated stocks, compete on leaderboards, and learn the basics of stock trading.
 
-## What's Included (Phase 1)
+## What's Included (Phase 1 + Phase 2)
 
+**Phase 1 — Foundation:**
 - **Authentication** — signup and login with hashed passwords
 - **Open Market** — browse, search, buy and sell 35 stocks (mix of real names + fictional companies)
 - **Portfolio** — track your holdings, profit/loss, and net worth
 - **Leaderboards** — weekly money, all-time best, and level rankings
 - **Player Profiles** — view any player's stats and holdings
 - **XP & Leveling** — earn XP from profitable trades
-- **Educational Tips** — trading tips shown after each buy/sell
 - **Announcements** — admin can post announcements for all players
+
+**Phase 2 — Live Market:**
+- **Stock Price Engine** — prices move every 30 seconds using a random walk algorithm with player buy/sell pressure
+- **Candlestick Charts** — toggle between line chart and real candlestick chart (open, high, low, close)
+- **Watchlist** — pin stocks with the star icon to track them in a dedicated panel
+- **Live Auto-Refresh** — prices update in real-time with green/red flash animations
+- **Educational Tips** — 12 rotating stock market tips shown contextually throughout the game
 
 ---
 
@@ -133,7 +140,8 @@ bullrun/
 ├── package.json              # Project config and scripts
 ├── wrangler.toml             # Cloudflare configuration
 ├── migrations/
-│   └── 0001_initial.sql      # Database tables and seed data
+│   ├── 0001_initial.sql      # Database tables and seed data
+│   └── 0002_watchlist.sql    # Watchlist table + tick tracking
 ├── functions/
 │   └── api/
 │       └── [[path]].js       # Backend API (all routes)
@@ -162,8 +170,7 @@ bullrun/
 
 ## Upcoming Phases
 
-- **Phase 2:** Stock price engine with random walk + player pressure, candlestick charts
-- **Phase 3:** Closed lobbies, global chat, full leveling system
+- **Phase 3:** Closed lobbies (competitive matches), global chat, full leveling system
 - **Phase 4:** Cosmetics, battle pass, crate spins, admin panel
 
 ---

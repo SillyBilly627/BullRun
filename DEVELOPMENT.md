@@ -35,12 +35,14 @@
 ```
 bullrun/
 ├── .gitignore
-├── package.json              # Scripts: dev, deploy, db:migrate:local, db:migrate:remote
+├── setup.sh                  # Local dev setup script (use npm run setup)
+├── package.json              # Scripts: setup, dev, deploy, db:migrate:local, db:migrate:remote
 ├── wrangler.toml             # Cloudflare config (D1 + KV bindings)
 ├── README.md                 # User-facing setup instructions
 ├── DEVELOPMENT.md            # THIS FILE — project status for AI context
 ├── migrations/
-│   └── 0001_initial.sql      # Full DB schema + seed data (35 stocks)
+│   ├── 0001_initial.sql      # Full DB schema + seed data (35 stocks)
+│   └── 0002_watchlist.sql    # Watchlist table + tick tracking config
 ├── functions/
 │   └── api/
 │       └── [[path]].js       # ALL backend API routes (single file)
@@ -87,6 +89,14 @@ Phase 1 has been tested and confirmed working locally:
 | `announcements` | GET | No | Active announcements |
 | `config/chat-status` | GET | No | Whether global chat is enabled |
 
+**Added in Phase 2:**
+
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `stocks/tick` | GET | Yes | Poll for price updates — triggers a tick if 30+ seconds have passed, returns all current prices |
+| `watchlist` | GET | Yes | Get user's pinned stocks |
+| `watchlist/toggle` | POST | Yes | Add or remove a stock from watchlist (auto-detects) |
+
 ### Frontend Pages
 
 - **Auth screen** — login/signup with validation and Enter key support
@@ -117,13 +127,15 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 
 ## What's NOT Built Yet (Remaining Phases)
 
-### Phase 2 — Core Gameplay (Priority: HIGH)
-- [ ] **Stock price engine** — random walk algorithm that runs on a schedule (every 30-60 seconds), uses `crypto.getRandomValues()` for randomness, incorporates buy_pressure from player activity
-- [ ] **Stock history recording** — save OHLCV candles to stock_history table each tick
-- [ ] **Candlestick chart toggle** — switch between line chart and proper candlestick chart in the stock detail modal
-- [ ] **Stock pinning/watchlist** — ability to pin stocks to a separate watchlist panel
-- [ ] **Auto-refresh** — poll for updated stock prices periodically on the frontend (every 10-30 seconds)
-- [ ] **Weekly reset** — scheduled job to reset all player money to $10,000 and stock prices to base
+### Phase 2 — Core Gameplay (Priority: HIGH) ✅ BUILT
+- [x] **Stock price engine** — random walk algorithm using `crypto.getRandomValues()`, incorporates buy_pressure from player activity, mean reversion toward base_price, occasional momentum spikes (10% chance of 2.5x moves)
+- [x] **Stock history recording** — saves OHLCV candles to stock_history table each tick
+- [x] **Candlestick chart toggle** — switch between line chart and candlestick chart in the stock detail modal
+- [x] **Stock pinning/watchlist** — pin/unpin stocks with star icon, watchlist panel at top of market page
+- [x] **Auto-refresh** — polls `stocks/tick` endpoint every 10 seconds, updates prices in-place with flash animations
+- [x] **Lazy tick evaluation** — prices auto-update when any player fetches stock data (every 30 seconds)
+- [x] **Educational tips** — 12 rotating stock market tips shown contextually
+- [ ] **Weekly reset** — scheduled job to reset all player money to $10,000 and stock prices to base (needs Cloudflare Cron Trigger or manual admin action)
 
 ### Phase 3 — Competitive & Social (Priority: MEDIUM)
 - [ ] **Closed Stockmarketing lobbies** — create/join lobbies with configurable settings (time limit, tick speed, player count, lock, reward type)
