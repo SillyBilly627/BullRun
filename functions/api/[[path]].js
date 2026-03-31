@@ -434,10 +434,10 @@ async function endLobbyMatch(env, lobbyId) {
       else if (placement === 2) reward = Math.round(pool * 0.30 * 100) / 100;
       else if (placement === 3) reward = Math.round(pool * 0.20 * 100) / 100;
     } else {
-      // Percentage mode: top 3 win a % of their open mode balance
-      if (placement === 1) reward = Math.round(p.open_money * (lobby.reward_percentage / 100) * 100) / 100;
-      else if (placement === 2) reward = Math.round(p.open_money * (lobby.reward_percentage / 100) * 0.6 * 100) / 100;
-      else if (placement === 3) reward = Math.round(p.open_money * (lobby.reward_percentage / 100) * 0.3 * 100) / 100;
+      // Percentage mode: fixed tiers — 1st=25%, 2nd=15%, 3rd=7.5% of open mode balance
+      if (placement === 1) reward = Math.round(p.open_money * 0.25 * 100) / 100;
+      else if (placement === 2) reward = Math.round(p.open_money * 0.15 * 100) / 100;
+      else if (placement === 3) reward = Math.round(p.open_money * 0.075 * 100) / 100;
     }
 
     // Bonus XP for placement
@@ -1557,6 +1557,47 @@ export async function onRequest(context) {
         cash: player.money,
         totalValue,
         netWorth: player.money + totalValue
+      });
+    }
+
+    // --- GET LOBBY STOCK DETAIL (with price history for charts) ---
+    if (path === 'lobbies/stock-detail' && method === 'GET') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      const lobbyId = parseInt(url.searchParams.get('lobbyId'));
+      const stockId = parseInt(url.searchParams.get('stockId'));
+      if (!lobbyId || !stockId) return jsonResponse({ error: 'Missing lobbyId or stockId' }, 400);
+
+      // Verify player is in this lobby
+      const player = await env.DB.prepare(
+        'SELECT * FROM lobby_players WHERE lobby_id = ? AND user_id = ?'
+      ).bind(lobbyId, user.id).first();
+      if (!player) return jsonResponse({ error: 'You are not in this lobby' }, 403);
+
+      // Get the stock
+      const stock = await env.DB.prepare(
+        'SELECT * FROM lobby_stocks WHERE id = ? AND lobby_id = ?'
+      ).bind(stockId, lobbyId).first();
+      if (!stock) return jsonResponse({ error: 'Stock not found' }, 404);
+
+      // Get price history from lobby_stock_history
+      const history = await env.DB.prepare(`
+        SELECT price, open_price, high_price, low_price, close_price, timestamp
+        FROM lobby_stock_history
+        WHERE lobby_id = ? AND stock_id = ?
+        ORDER BY timestamp ASC
+      `).bind(lobbyId, stockId).all();
+
+      // Get user's holding for this stock
+      const holding = await env.DB.prepare(
+        'SELECT shares, avg_buy_price FROM lobby_portfolios WHERE lobby_id = ? AND user_id = ? AND stock_id = ?'
+      ).bind(lobbyId, user.id, stockId).first();
+
+      return jsonResponse({
+        stock,
+        history: history.results,
+        holding: holding || { shares: 0, avg_buy_price: 0 }
       });
     }
 

@@ -380,10 +380,12 @@
                 </div>
               </div>
               <div id="reward-pct-fields" style="display:none;">
-                <div class="input-group">
-                  <label for="create-reward-pct">Reward Percentage (%)</label>
-                  <input type="number" id="create-reward-pct" value="10" min="1" max="50">
-                  <span class="input-hint">Winners earn this % of their Open mode balance.</span>
+                <div class="reward-tiers-info">
+                  <span class="input-group"><label>Reward Tiers</label></span>
+                  <div class="tier-row"><span class="tier-medal">🥇 1st Place</span><span class="tier-pct">+25% of balance</span></div>
+                  <div class="tier-row"><span class="tier-medal">🥈 2nd Place</span><span class="tier-pct">+15% of balance</span></div>
+                  <div class="tier-row"><span class="tier-medal">🥉 3rd Place</span><span class="tier-pct">+7.5% of balance</span></div>
+                  <span class="input-hint">Winners earn a % of their Open mode cash balance.</span>
                 </div>
               </div>
               <div id="create-error" class="error-message"></div>
@@ -504,6 +506,21 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
       <div id="stock-detail-content">
+        <p class="placeholder-text">Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- LOBBY STOCK DETAIL MODAL       -->
+  <!-- ============================== -->
+  <div id="lobby-stock-modal" class="modal" style="display:none;">
+    <div class="modal-overlay" onclick="Lobby.closeStockModal()"></div>
+    <div class="modal-content stock-detail">
+      <button class="modal-close" onclick="Lobby.closeStockModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <div id="lobby-stock-detail-content">
         <p class="placeholder-text">Loading...</p>
       </div>
     </div>

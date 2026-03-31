@@ -806,7 +806,7 @@ const Market = (() => {
     });
   }
 
-  return { load, filterStocks, openDetail, closeModal, updateTradeTotal, executeTrade, togglePin, setChartType, setHistoryRange, startPolling, stopPolling };
+  return { load, filterStocks, openDetail, closeModal, updateTradeTotal, executeTrade, togglePin, setChartType, setHistoryRange, startPolling, stopPolling, drawChart, drawLineChart, drawCandlestickChart };
 })();
 
 // ============================================================
@@ -1023,6 +1023,8 @@ const Lobby = (() => {
   let matchPollInterval = null;  // Timer for polling match updates
   let waitingPollInterval = null;// Timer for polling waiting room
   let selectedTradeStock = null; // Currently selected stock for trading in match
+  let lobbyChartType = 'line';   // Chart type for lobby stock modal
+  let lobbyDetailHistory = [];   // Stored history for chart redraws
 
   // --- MAIN LOAD: checks if user is already in a lobby ---
   async function load() {
@@ -1072,7 +1074,7 @@ const Lobby = (() => {
     listEl.innerHTML = lobbies.map(l => {
       const rewardText = l.reward_type === 'pool'
         ? `$${parseFloat(l.pool_entry_fee).toFixed(0)} entry`
-        : `${l.reward_percentage}% reward`;
+        : '25/15/7.5% reward';
       return `
         <div class="lobby-card" onclick="Lobby.joinOrView(${l.id})">
           <div>
@@ -1172,7 +1174,6 @@ const Lobby = (() => {
       isLocked: document.getElementById('create-locked').value === '1',
       rewardType: document.getElementById('create-reward').value,
       entryFee: parseFloat(document.getElementById('create-entry-fee').value) || 500,
-      rewardPercentage: parseFloat(document.getElementById('create-reward-pct').value) || 10,
     };
 
     const res = await API.createLobby(settings);
@@ -1229,7 +1230,7 @@ const Lobby = (() => {
 
     document.getElementById('waiting-lobby-name').textContent = lobby.name;
     document.getElementById('waiting-lobby-settings').textContent =
-      `${lobby.time_limit_minutes}min · ${lobby.tick_speed_seconds}s ticks · ${lobby.reward_type === 'pool' ? '$' + parseFloat(lobby.pool_entry_fee).toFixed(0) + ' pool' : lobby.reward_percentage + '% reward'}`;
+      `${lobby.time_limit_minutes}min · ${lobby.tick_speed_seconds}s ticks · ${lobby.reward_type === 'pool' ? '$' + parseFloat(lobby.pool_entry_fee).toFixed(0) + ' pool' : '25/15/7.5% reward'}`;
 
     // Settings tags
     document.getElementById('waiting-settings-bar').innerHTML = `
@@ -1348,6 +1349,9 @@ const Lobby = (() => {
           <span class="stock-name" style="font-size:0.75rem;color:var(--text-muted);"></span>
           <span class="stock-price mono" style="font-size:0.85rem;">${formatMoney(s.current_price)}</span>
           <span class="stock-change ${dir}" style="font-size:0.72rem;">${formatPercent(pct)}</span>
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); Lobby.openStockModal(${s.id})" style="padding:0.25rem 0.45rem;font-size:0.7rem;" title="View chart">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </button>
         </div>
       `;
     }).join('');
@@ -1535,6 +1539,151 @@ const Lobby = (() => {
     showBrowser();
   }
 
+  // --- LOBBY STOCK DETAIL MODAL (with chart) ---
+  async function openStockModal(stockId) {
+    if (!currentLobby) return;
+    lobbyChartType = 'line';
+    lobbyDetailHistory = [];
+
+    const modal = document.getElementById('lobby-stock-modal');
+    const content = document.getElementById('lobby-stock-detail-content');
+    modal.style.display = 'flex';
+    content.innerHTML = '<p class="placeholder-text">Loading stock data...</p>';
+
+    const res = await API.getLobbyStockDetail(currentLobby.id, stockId);
+    if (!res.ok) {
+      content.innerHTML = `<p class="error-message">${res.data.error || 'Failed to load stock'}</p>`;
+      return;
+    }
+
+    const { stock, history, holding } = res.data;
+    lobbyDetailHistory = history;
+    renderLobbyStockModal(stock, history, holding);
+  }
+
+  function renderLobbyStockModal(stock, history, holding) {
+    const content = document.getElementById('lobby-stock-detail-content');
+    const pct = stock.previous_price > 0 ? ((stock.current_price - stock.previous_price) / stock.previous_price * 100) : 0;
+    const dir = changeClass(stock.current_price, stock.previous_price);
+    const basePct = stock.base_price > 0 ? ((stock.current_price - stock.base_price) / stock.base_price * 100) : 0;
+
+    content.innerHTML = `
+      <div class="stock-detail-header">
+        <div class="sd-left">
+          <h2>${stock.name}</h2>
+          <span class="sd-symbol">${stock.symbol}</span>
+        </div>
+        <div style="text-align:right;">
+          <div class="sd-price">${formatMoney(stock.current_price)}</div>
+          <div class="sd-price-change ${dir === 'up' ? 'text-gain' : dir === 'down' ? 'text-loss' : 'text-muted'}">
+            ${formatPercent(pct)} · Base ${formatPercent(basePct)}
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-controls">
+        <div class="chart-controls-left">
+          <button class="chart-toggle-btn ${lobbyChartType === 'line' ? 'active' : ''}" id="lobby-btn-line" onclick="Lobby.setChartType('line')">Line</button>
+          <button class="chart-toggle-btn ${lobbyChartType === 'candle' ? 'active' : ''}" id="lobby-btn-candle" onclick="Lobby.setChartType('candle')">Candlestick</button>
+        </div>
+        <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-dim);">
+          Volatility: ${(stock.volatility * 100).toFixed(1)}%
+        </div>
+      </div>
+
+      <div class="chart-container" id="lobby-stock-chart">
+        ${history.length > 1
+          ? '<canvas id="lobby-chart-canvas" style="width:100%;height:100%;"></canvas>'
+          : '<span>Waiting for price data — prices update every few seconds</span>'
+        }
+      </div>
+
+      ${holding.shares > 0 ? `
+        <div class="trade-holding-info" style="margin-bottom:1rem;">
+          You own <strong>${holding.shares}</strong> shares at avg price <strong>${formatMoney(holding.avg_buy_price)}</strong>
+          · Current value: <strong>${formatMoney(holding.shares * stock.current_price)}</strong>
+          · P/L: <span class="${formatPnlColor((stock.current_price - holding.avg_buy_price) * holding.shares)}">
+            ${formatMoney((stock.current_price - holding.avg_buy_price) * holding.shares)}
+          </span>
+        </div>
+      ` : ''}
+
+      <div class="trade-form">
+        <div class="trade-section buy-section">
+          <h4>Buy ${stock.symbol}</h4>
+          <div class="trade-input-row">
+            <input type="number" id="lobby-modal-buy-shares" min="1" value="1" oninput="Lobby.updateModalTradeTotal('buy', ${stock.current_price})">
+          </div>
+          <div class="trade-total" id="lobby-modal-buy-total">Total: ${formatMoney(stock.current_price)}</div>
+          <button class="btn btn-primary btn-full btn-sm" onclick="Lobby.modalTrade('buy', ${stock.id}, ${stock.current_price})">Buy Shares</button>
+        </div>
+        <div class="trade-section sell-section">
+          <h4>Sell ${stock.symbol}</h4>
+          <div class="trade-input-row">
+            <input type="number" id="lobby-modal-sell-shares" min="1" max="${holding.shares}" value="1" ${holding.shares <= 0 ? 'disabled' : ''}
+                   oninput="Lobby.updateModalTradeTotal('sell', ${stock.current_price})">
+          </div>
+          <div class="trade-total" id="lobby-modal-sell-total">Total: ${formatMoney(stock.current_price)}</div>
+          <button class="btn btn-danger btn-full btn-sm" onclick="Lobby.modalTrade('sell', ${stock.id}, ${stock.current_price})" ${holding.shares <= 0 ? 'disabled' : ''}>Sell Shares</button>
+        </div>
+      </div>
+    `;
+
+    // Draw the chart
+    if (history.length > 1) {
+      Market.drawChart('lobby-chart-canvas', history, lobbyChartType);
+    }
+  }
+
+  function setChartType(type) {
+    lobbyChartType = type;
+    const lineBtn = document.getElementById('lobby-btn-line');
+    const candleBtn = document.getElementById('lobby-btn-candle');
+    if (lineBtn) lineBtn.classList.toggle('active', type === 'line');
+    if (candleBtn) candleBtn.classList.toggle('active', type === 'candle');
+    if (lobbyDetailHistory.length > 1) {
+      Market.drawChart('lobby-chart-canvas', lobbyDetailHistory, lobbyChartType);
+    }
+  }
+
+  function updateModalTradeTotal(type, pricePerShare) {
+    const input = document.getElementById(`lobby-modal-${type}-shares`);
+    const totalEl = document.getElementById(`lobby-modal-${type}-total`);
+    const shares = parseInt(input.value) || 0;
+    totalEl.textContent = `Total: ${formatMoney(shares * pricePerShare)}`;
+  }
+
+  async function modalTrade(type, stockId, price) {
+    if (!currentLobby) return;
+    const input = document.getElementById(`lobby-modal-${type}-shares`);
+    const shares = parseInt(input.value);
+    if (!shares || shares < 1) {
+      showToast('Enter a valid number of shares', 'error');
+      return;
+    }
+
+    let res;
+    if (type === 'buy') {
+      res = await API.lobbyBuy(currentLobby.id, stockId, shares);
+    } else {
+      res = await API.lobbySell(currentLobby.id, stockId, shares);
+    }
+
+    if (res.ok) {
+      showToast(res.data.message, 'success');
+      document.getElementById('match-cash').textContent = formatMoney(res.data.newBalance);
+      // Refresh the modal
+      openStockModal(stockId);
+    } else {
+      showToast(res.data.error || 'Trade failed', 'error');
+    }
+  }
+
+  function closeStockModal() {
+    document.getElementById('lobby-stock-modal').style.display = 'none';
+    lobbyDetailHistory = [];
+  }
+
   // --- CLEANUP ---
   function stopAllPolling() {
     if (matchPollInterval) { clearInterval(matchPollInterval); matchPollInterval = null; }
@@ -1546,6 +1695,8 @@ const Lobby = (() => {
     joinOrView, leaveRoom, startMatch,
     selectStock, closeTrade, updateMatchTradeTotal, matchTrade,
     backToBrowser,
+    openStockModal, closeStockModal, setChartType,
+    updateModalTradeTotal, modalTrade,
   };
 })();
 
@@ -1696,9 +1847,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }, 1500); // Show loading animation for at least 1.5s
 });
 
-// Close modal with Escape key
+// Close modals with Escape key
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     Market.closeModal();
+    if (typeof Lobby !== 'undefined') Lobby.closeStockModal();
   }
 });

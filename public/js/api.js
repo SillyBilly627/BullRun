@@ -203,6 +203,10 @@ const API = (() => {
     return get(`lobbies/results/${lobbyId}`);
   }
 
+  async function getLobbyStockDetail(lobbyId, stockId) {
+    return get(`lobbies/stock-detail?lobbyId=${lobbyId}&stockId=${stockId}`);
+  }
+
   // ---- CHAT ENDPOINTS ----
   async function getChatMessages(since) {
     return get(`chat/messages${since ? '?since=' + encodeURIComponent(since) : ''}`);
@@ -224,7 +228,7 @@ const API = (() => {
     // Lobbies
     getLobbies, getMyActiveLobby, createLobby, getLobbyDetails,
     joinLobby, leaveLobby, startLobby, lobbyTick,
-    lobbyBuy, lobbySell, getLobbyPortfolio, getLobbyResults,
+    lobbyBuy, lobbySell, getLobbyPortfolio, getLobbyResults, getLobbyStockDetail,
     // Chat
     getChatMessages, sendChatMessage,
   };
