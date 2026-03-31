@@ -42,7 +42,8 @@ bullrun/
 ├── DEVELOPMENT.md            # THIS FILE — project status for AI context
 ├── migrations/
 │   ├── 0001_initial.sql      # Full DB schema + seed data (35 stocks)
-│   └── 0002_watchlist.sql    # Watchlist table + tick tracking config
+│   ├── 0002_watchlist.sql    # Watchlist table + tick tracking config
+│   └── 0003_lobby_stock_history.sql  # Lobby stock price history table
 ├── functions/
 │   └── api/
 │       └── [[path]].js       # ALL backend API routes (single file)
@@ -97,6 +98,25 @@ Phase 1 has been tested and confirmed working locally:
 | `watchlist` | GET | Yes | Get user's pinned stocks with mini sparkline data (last 20 close prices per stock) |
 | `watchlist/toggle` | POST | Yes | Add or remove a stock from watchlist (auto-detects) |
 
+**Added in Phase 3:**
+
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `lobbies` | GET | Yes | List all open/active lobbies with creator info and player count |
+| `lobbies/my-active` | GET | Yes | Get user's current active/waiting lobby (if any) |
+| `lobbies/create` | POST | Yes | Create a new lobby with settings (time, players, tick speed, rewards) |
+| `lobbies/:id` | GET | Yes | Get lobby details, players, and stocks (if active) |
+| `lobbies/join` | POST | Yes | Join a waiting lobby (deducts entry fee for pool mode) |
+| `lobbies/leave` | POST | Yes | Leave a waiting lobby (refunds entry fee, deletes lobby if creator) |
+| `lobbies/start` | POST | Yes | Start match — creator only, needs 2+ players, generates stocks |
+| `lobbies/tick` | GET | Yes | Poll for lobby price updates, rankings, timer. Auto-ends match on timeout. |
+| `lobbies/buy` | POST | Yes | Buy shares of a lobby stock during active match |
+| `lobbies/sell` | POST | Yes | Sell shares of a lobby stock during active match |
+| `lobbies/portfolio` | GET | Yes | Get user's holdings within an active lobby match |
+| `lobbies/results/:id` | GET | Yes | Get finished match results: placements, rewards, XP, trade stats |
+| `chat/messages` | GET | Yes | Get recent chat messages (supports `?since=` for incremental polling) |
+| `chat/send` | POST | Yes | Send a chat message (200 char max, sanitized, checks chat_banned) |
+
 ### Frontend Pages
 
 - **Auth screen** — login/signup with validation and Enter key support
@@ -106,7 +126,9 @@ Phase 1 has been tested and confirmed working locally:
 - **Portfolio page** — summary cards (cash, holdings value, net worth, P/L) + individual holdings list with per-stock P/L
 - **Leaderboard page** — tabbed view (weekly/all-time/level), clickable rows to view profiles, highlights current user
 - **Profile page** — avatar with initial, username, title, join date, stats grid, holdings list
-- **Lobbies page** — placeholder "Coming Soon"
+- **Lobbies page** — lobby browser (lists all open/active lobbies as cards), create lobby modal (name, time, players, tick speed, lock, reward type with pool/percentage options), waiting room (live player list with 3s polling, settings tags, host start controls, leave button), active match UI (stock list with click-to-trade, live leaderboard sidebar, countdown timer with urgent flash at <30s, portfolio sidebar, buy/sell panel), post-game results screen (placement with emoji, rewards, XP, full rankings table with trade stats)
+- **Global chat panel** — collapsible bottom-right panel visible on all pages, 4-second polling for new messages, unread badge when minimized, timestamps, user levels displayed, send with Enter key, checks chat_enabled config
+- **XP progress bar** — shown in nav bar next to level badge, shows current XP / XP needed for next level with gradient fill bar
 - **Toast notifications** — success/error/info toasts with educational tips after trades
 - **Announcement banner** — dismissable top banner for admin messages
 - **Loading screen** — animated logo + progress bar on page load
@@ -114,7 +136,7 @@ Phase 1 has been tested and confirmed working locally:
 
 ### Database Tables Created
 
-Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lobby_players, lobby_stocks, lobby_portfolios, lobby_transactions, cosmetics, user_cosmetics, chat_messages, announcements, bans, game_config (with default settings).
+Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lobby_players, lobby_stocks, lobby_portfolios, lobby_transactions, lobby_stock_history, cosmetics, user_cosmetics, chat_messages, announcements, bans, game_config (with default settings), watchlist.
 
 ### Key Design Decisions
 
@@ -143,34 +165,34 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 - [x] **Educational tips** — 12 rotating stock market tips shown contextually
 - [ ] **Weekly reset** — scheduled job to reset all player money to $10,000 and stock prices to base (needs Cloudflare Cron Trigger or manual admin action)
 
-### Phase 3 — Competitive & Social (Priority: HIGH — build next)
+### Phase 3 — Competitive & Social ✅ COMPLETE
 
 **Closed Stockmarketing (Lobby Mode):**
-- [ ] **Lobby creation** — player creates a lobby with settings: time limit (10 min to 1 hour), max players, lock toggle (prevent randoms joining), tick speed (3-10 seconds), reward type (money pool OR percentage-based)
-- [ ] **Lobby waiting room** — shows all joined players with their levels, Open mode money, and leaderboard positions. Creator can start the match.
-- [ ] **Lobby match gameplay** — 5-8 stocks with randomly generated company names per match. Faster ticks (3-10 sec based on settings). Each player starts with $10,000 match money. Separate portfolio/transactions from Open mode.
-- [ ] **In-match UI** — small leaderboard showing live player rankings, countdown timer, portfolio view, buy/sell interface
-- [ ] **Post-game score page** — final rankings, shares bought/sold per player, profit/loss, times sold under buy price, reward amount won, XP earned
-- [ ] **Reward system (money pool)** — all players put in a set entry fee on join. Winners take portions of the pool. Rewards go to Open mode balance.
-- [ ] **Reward system (percentage)** — 1st/2nd/3rd win a percentage of their existing Open mode balance
-- [ ] **XP from lobbies** — XP for participation + bonus XP based on placement
+- [x] **Lobby creation** — player creates a lobby with settings: time limit (5-60 min), max players (2-8), lock toggle, tick speed (3-10 seconds), reward type (money pool OR percentage-based)
+- [x] **Lobby waiting room** — shows all joined players with their levels and Open mode money. Creator can start the match. Auto-refreshes every 3 seconds to detect new players and match start.
+- [x] **Lobby match gameplay** — 5-8 stocks with randomly generated company names per match (40 prefixes × 20 suffixes × 10 sectors). Faster ticks (3-10 sec). Each player starts with $10,000 match money. Separate portfolio/transactions from Open mode.
+- [x] **In-match UI** — stock list with click-to-trade, small leaderboard showing live player net worth rankings, countdown timer (flashes red at <30s), portfolio view, buy/sell interface. Polls every 2 seconds.
+- [x] **Post-game score page** — final rankings with placement emoji, P/L per player, trade count, reward amount won, XP earned. Full results table.
+- [x] **Reward system (money pool)** — all players pay entry fee on join. Pool distributed: 1st=50%, 2nd=30%, 3rd=20%. Rewards go to Open mode balance.
+- [x] **Reward system (percentage)** — 1st gets full %, 2nd gets 60% of that, 3rd gets 30% of that. Based on Open mode balance.
+- [x] **XP from lobbies** — 25 XP participation + 100/60/30 XP for 1st/2nd/3rd + 5 XP per $100 profit
 
 **Global Chat:**
-- [ ] **Chat panel** — collapsible sidebar or bottom panel visible on all pages, messages show username + level
-- [ ] **Admin controls** — admin can enable/disable chat globally, clear history, ban individual players from chat (without banning from game)
-- [ ] **Simple design** — one global room, no private messaging
+- [x] **Chat panel** — collapsible bottom-right panel visible on all pages after login, messages show username + level + timestamp, polls every 4 seconds with incremental `?since=` parameter, unread badge when minimized
+- [x] **Admin controls** — backend supports: enable/disable chat via `game_config` table, `chat_banned` field on users prevents sending (admin panel UI deferred to Phase 4)
+- [x] **Simple design** — one global room, no private messaging, 200 char max, XSS sanitized
 
 **Leveling:**
-- [ ] **Leveling milestones** — unlock cosmetic items at certain levels (ties into Phase 4 battle pass)
+- [x] **XP progress bar** — shown in nav bar with gradient fill, shows current XP / XP needed for next level
+- [ ] **Leveling milestones** — unlock cosmetic items at certain levels (deferred to Phase 4 with battle pass)
 
-**NOTE:** Database tables for lobbies and chat already exist in `migrations/0001_initial.sql`:
-- `lobbies` — lobby settings (status, max_players, time_limit, tick_speed, is_locked, reward_type, pool_entry_fee, reward_percentage)
-- `lobby_players` — players in each lobby (money, final_money, placement, reward_earned, xp_earned)
-- `lobby_stocks` — stocks generated per match (symbol, name, price, volatility, buy_pressure)
-- `lobby_portfolios` — holdings within a match
-- `lobby_transactions` — trade log for matches
-- `chat_messages` — global chat (user_id, message, created_at)
-- `game_config` has `chat_enabled` key (default '1')
+**Architecture notes for Phase 3:**
+- Lobby ticks use the same lazy evaluation pattern as Open mode: frontend polls, backend ticks if enough time has passed. KV key `lobby_tick_{id}` tracks last tick per lobby.
+- Match auto-ends via the tick endpoint: if `timeRemaining <= 0`, `endLobbyMatch()` is called which calculates placements, distributes rewards, awards XP, and cleans up.
+- Chat uses incremental polling: first load gets last 50 messages, subsequent polls use `?since=` timestamp to only fetch new messages.
+- Lobby stocks use `lobby_stocks` table (separate from main `stocks`). Lobby stock history in `lobby_stock_history` table (migration 0003).
+- Random company names: 40 prefixes × 20 suffixes with collision detection. Symbols are first 2 chars of prefix + first 2 chars of suffix, uppercased.
+- Lobby price engine: more volatile than Open mode (volatility 0.03-0.08, 15% momentum chance at 3x multiplier, weaker mean reversion, faster pressure decay at 0.6).
 
 ### Phase 4 — Polish & Extras (Priority: LOW)
 - [ ] **Cosmetics system** — titles, profile backgrounds, leaderboard card styles, visual effects. Items stored in `cosmetics` table, ownership in `user_cosmetics` table. Users equip via `equipped_title`, `equipped_background`, `equipped_card_style` fields on users table.
@@ -187,7 +209,7 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 ## How to Continue Development
 
 1. Read this file to understand what exists
-2. Pick up from the next uncompleted phase (Phase 3)
+2. Pick up from the next uncompleted phase (Phase 4)
 3. After making changes, commit with a descriptive message and update the checklist above
 4. Keep the same patterns: all API routes in the single `[[path]].js` file, vanilla JS frontend modules, dark theme CSS variables
 5. **The original master prompt/project brief is NOT available in new sessions** — all requirements are documented in this file. If something is ambiguous, ask Xavier.
@@ -195,7 +217,7 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 ### Key files to modify per phase:
 - **New API routes:** Add to `functions/api/[[path]].js`
 - **New pages/UI:** Add HTML to `public/index.html`, styles to `public/css/style.css`, logic to `public/js/app.js`
-- **New database tables:** Create a new migration file `migrations/0003_*.sql` (next number in sequence)
+- **New database tables:** Create a new migration file `migrations/0004_*.sql` (next number in sequence)
 - **Configuration:** `wrangler.toml` for Cloudflare bindings
 
 ### Local development:
@@ -280,9 +302,11 @@ This ensures the tables are always in the same database file the dev server uses
 - Always update DEVELOPMENT.md after completing features.
 - The `setup.sh` file gets modified locally by `chmod +x` — Xavier must run `git checkout -- setup.sh` before `git pull`.
 
-### Lobby Tick System (for Phase 3)
-- Lobby matches need their own tick system separate from the Open market's lazy ticks.
-- Open market ticks every 30 seconds. Lobby ticks are faster (3-10 seconds configurable).
-- Since we can't use Durable Objects, lobby ticks should use the same lazy evaluation pattern: frontend polls for updates, backend ticks if enough time has passed.
-- Lobby stocks use `lobby_stocks` table (separate from main `stocks` table).
-- Random company name generation needed for lobby stocks (e.g., "NovaCrest Holdings", "BlueArc Systems").
+### Lobby Tick System (Phase 3 — IMPLEMENTED)
+- Lobby matches use their own tick system separate from the Open market's lazy ticks.
+- Open market ticks every 30 seconds. Lobby ticks are faster (3-10 seconds configurable per lobby).
+- Uses the same lazy evaluation pattern: frontend polls every 2 seconds, backend ticks if enough time has passed (checked via KV key `lobby_tick_{id}`).
+- Lobby stocks use `lobby_stocks` table (separate from main `stocks` table). Price history in `lobby_stock_history` table.
+- Random company name generation: 40 prefixes × 20 suffixes, with collision detection for both names and symbols within a lobby.
+- Lobby price engine differences from Open mode: higher volatility range (0.03-0.08), stronger player pressure effect (×0.002 vs ×0.001), weaker mean reversion (0.3% vs 0.5%), faster pressure decay (×0.6 vs ×0.7), 15% momentum chance at 3x multiplier (vs 10% at 2.5x in Open mode).
+- Match auto-ends: lobby tick endpoint checks if `timeRemaining <= 0` and calls `endLobbyMatch()` to calculate placements, distribute rewards, award XP, and clean up the KV tick key.
