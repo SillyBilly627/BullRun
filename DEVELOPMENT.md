@@ -77,7 +77,7 @@ Phase 1 has been tested and confirmed working locally:
 | `auth/logout` | POST | Yes | Invalidate session |
 | `auth/me` | GET | Yes | Get current user data |
 | `stocks` | GET | Yes | List all active stocks |
-| `stocks/:id` | GET | Yes | Stock detail + price history + user's holding |
+| `stocks/:id` | GET | Yes | Stock detail + price history + user's holding. Accepts `?limit=N` (10-1000, default 100) for history range |
 | `stocks/buy` | POST | Yes | Buy shares (deducts money, updates portfolio, adds buy pressure) |
 | `stocks/sell` | POST | Yes | Sell shares (adds money, calculates P/L, awards XP if profitable) |
 | `portfolio` | GET | Yes | User's holdings with P/L calculations |
@@ -131,9 +131,10 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 - [x] **Stock price engine** — random walk algorithm using `crypto.getRandomValues()`, incorporates buy_pressure from player activity, mean reversion toward base_price, occasional momentum spikes (10% chance of 2.5x moves)
 - [x] **Stock history recording** — saves OHLCV candles to stock_history table each tick
 - [x] **Candlestick chart toggle** — switch between line chart and candlestick chart in the stock detail modal
-- [x] **Stock pinning/watchlist** — pin/unpin stocks with star icon, watchlist panel at top of market page
+- [x] **Stock pinning/watchlist** — pin/unpin stocks with star icon, watchlist panel at top of market page, mini sparkline charts on each pinned stock showing last 20 price ticks
 - [x] **Auto-refresh** — polls `stocks/tick` endpoint every 10 seconds, updates prices in-place with flash animations
 - [x] **Lazy tick evaluation** — prices auto-update when any player fetches stock data (every 30 seconds)
+- [x] **Chart history range** — stock detail modal has range selector (25, 50, 100, 250, All candles), backend accepts `?limit=` parameter (clamped 10-1000)
 - [x] **Educational tips** — 12 rotating stock market tips shown contextually
 - [ ] **Weekly reset** — scheduled job to reset all player money to $10,000 and stock prices to base (needs Cloudflare Cron Trigger or manual admin action)
 
