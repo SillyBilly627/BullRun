@@ -2,13 +2,6 @@
 # ============================================================
 # BullRun — Local Development Setup Script
 # ============================================================
-# This script sets up the local database correctly.
-# It handles the path mismatch between wrangler's migration
-# tool and the dev server by:
-# 1. Starting the dev server briefly to create the DB file
-# 2. Finding where it put the database
-# 3. Running the migration SQL directly into that file
-# ============================================================
 
 echo ""
 echo "  ╔══════════════════════════════════════╗"
@@ -22,46 +15,59 @@ rm -rf .wrangler
 
 # Step 2: Start the dev server in the background
 echo "→ Starting dev server to initialise database..."
-npx wrangler pages dev ./public --d1 DB --kv SESSION_STORE --port 8788 &
+npx wrangler pages dev ./public --d1 DB --kv SESSION_STORE --port 8788 > /tmp/bullrun_setup.log 2>&1 &
 SERVER_PID=$!
 
-# Wait for the server to start
-sleep 5
+echo "  Waiting for server to boot..."
+sleep 8
 
-# Step 3: Hit the server to force it to create the DB file
-# We use the announcements endpoint because it queries the database
-# without needing authentication, which forces D1 to create the sqlite file
+# Step 3: Hit the server to force D1 to create the DB file on disk
 echo "→ Triggering database creation..."
 curl -s -o /dev/null http://localhost:8788/api/announcements 2>/dev/null
-curl -s -o /dev/null -X POST -H "Content-Type: application/json" -d '{"username":"_setup_","password":"Setup1"}' http://localhost:8788/api/auth/signup 2>/dev/null
-
-# Wait a moment for the file to be written
+curl -s -o /dev/null http://localhost:8788/api/config/chat-status 2>/dev/null
 sleep 3
 
-# Step 4: Find the SQLite database file (with retries)
+# Step 4: Find the database file — check ANY file and test if it's SQLite
+echo "→ Searching for database file..."
 DB_FILE=""
-for attempt in 1 2 3 4 5; do
-  DB_FILE=$(find .wrangler -name "*.sqlite" 2>/dev/null | head -1)
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  # Find all files in .wrangler, test each one to see if it's a SQLite DB
+  while IFS= read -r f; do
+    if [ -f "$f" ] && file "$f" 2>/dev/null | grep -qi "sqlite"; then
+      DB_FILE="$f"
+      break
+    fi
+    # Also check by reading the first bytes (SQLite files start with "SQLite format 3")
+    if [ -f "$f" ] && head -c 16 "$f" 2>/dev/null | grep -q "SQLite format 3"; then
+      DB_FILE="$f"
+      break
+    fi
+  done < <(find .wrangler -type f 2>/dev/null)
+
   if [ -n "$DB_FILE" ]; then
     break
   fi
-  echo "  Waiting for database file (attempt $attempt)..."
+  echo "  Searching... (attempt $attempt)"
   sleep 2
 done
 
-if [ -z "$DB_FILE" ]; then
-  echo "✘ Could not find the database file. Something went wrong."
-  kill $SERVER_PID 2>/dev/null
-  exit 1
-fi
-
-echo "→ Found database at: $DB_FILE"
-
-# Step 5: Stop the server
+# Step 5: Stop the dev server
 echo "→ Stopping dev server..."
 kill $SERVER_PID 2>/dev/null
 wait $SERVER_PID 2>/dev/null
 sleep 1
+
+if [ -z "$DB_FILE" ]; then
+  echo ""
+  echo "  ✘ Could not find the SQLite database file."
+  echo "  All files found in .wrangler:"
+  find .wrangler -type f 2>/dev/null
+  echo ""
+  echo "  Try: rm -rf .wrangler node_modules && npm install && npm run setup"
+  exit 1
+fi
+
+echo "→ Found database at: $DB_FILE"
 
 # Step 6: Run the migration SQL directly into the database
 echo "→ Running database migrations..."
