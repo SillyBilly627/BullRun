@@ -1560,6 +1560,38 @@ export async function onRequest(context) {
       });
     }
 
+    // --- GET ALL LOBBY STOCK HISTORIES (batch — for live charts) ---
+    if (path === 'lobbies/all-history' && method === 'GET') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      const lobbyId = parseInt(url.searchParams.get('lobbyId'));
+      if (!lobbyId) return jsonResponse({ error: 'Missing lobbyId' }, 400);
+
+      const player = await env.DB.prepare(
+        'SELECT * FROM lobby_players WHERE lobby_id = ? AND user_id = ?'
+      ).bind(lobbyId, user.id).first();
+      if (!player) return jsonResponse({ error: 'You are not in this lobby' }, 403);
+
+      // Get all stocks
+      const stocks = await env.DB.prepare(
+        'SELECT id FROM lobby_stocks WHERE lobby_id = ?'
+      ).bind(lobbyId).all();
+
+      // Get last 60 price points for each stock
+      const histories = {};
+      for (const s of stocks.results) {
+        const hist = await env.DB.prepare(`
+          SELECT price, open_price, high_price, low_price, close_price, timestamp
+          FROM lobby_stock_history WHERE lobby_id = ? AND stock_id = ?
+          ORDER BY timestamp DESC LIMIT 60
+        `).bind(lobbyId, s.id).all();
+        histories[s.id] = hist.results.reverse();
+      }
+
+      return jsonResponse({ histories });
+    }
+
     // --- GET LOBBY STOCK DETAIL (with price history for charts) ---
     if (path === 'lobbies/stock-detail' && method === 'GET') {
       const user = await getSessionUser(request, env);

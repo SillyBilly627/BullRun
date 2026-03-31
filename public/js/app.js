@@ -1025,6 +1025,7 @@ const Lobby = (() => {
   let selectedTradeStock = null; // Currently selected stock for trading in match
   let lobbyChartType = 'line';   // Chart type for lobby stock modal
   let lobbyDetailHistory = [];   // Stored history for chart redraws
+  let stockHistories = {};       // { stockId: [price, price, ...] } for live inline charts
 
   // --- MAIN LOAD: checks if user is already in a lobby ---
   async function load() {
@@ -1297,11 +1298,20 @@ const Lobby = (() => {
     document.getElementById('lobby-results').style.display = 'none';
     stopAllPolling();
     selectedTradeStock = null;
+    stockHistories = {};
 
     // Get lobby details for name
     const detailRes = await API.getLobbyDetails(lobbyId);
     if (detailRes.ok) {
       document.getElementById('match-lobby-name').textContent = detailRes.data.lobby.name;
+    }
+
+    // Fetch initial price histories for all stocks (so charts aren't empty)
+    const histRes = await API.getAllLobbyHistory(lobbyId);
+    if (histRes.ok && histRes.data.histories) {
+      for (const [stockId, hist] of Object.entries(histRes.data.histories)) {
+        stockHistories[stockId] = hist.map(h => h.close_price || h.price);
+      }
     }
 
     // Initial tick + render
@@ -1327,7 +1337,7 @@ const Lobby = (() => {
       return;
     }
 
-    const { prices, rankings, timeRemaining } = tickRes.data;
+    const { prices, rankings, timeRemaining, ticked } = tickRes.data;
 
     // Update timer
     const mins = Math.floor(timeRemaining / 60);
@@ -1337,24 +1347,52 @@ const Lobby = (() => {
     const timerEl = document.getElementById('match-timer');
     timerEl.classList.toggle('urgent', timeRemaining < 30);
 
-    // Update stock list
-    const stockListEl = document.getElementById('match-stock-list');
-    stockListEl.innerHTML = prices.map(s => {
+    // Append new prices to history if a tick happened
+    if (ticked) {
+      prices.forEach(s => {
+        if (!stockHistories[s.id]) stockHistories[s.id] = [];
+        stockHistories[s.id].push(s.current_price);
+        // Keep last 120 points max
+        if (stockHistories[s.id].length > 120) stockHistories[s.id].shift();
+      });
+    }
+
+    // Render stock cards grid
+    const gridEl = document.getElementById('match-stocks-grid');
+    gridEl.innerHTML = prices.map(s => {
       const pct = s.previous_price > 0 ? ((s.current_price - s.previous_price) / s.previous_price * 100) : 0;
       const dir = changeClass(s.current_price, s.previous_price);
       const sel = selectedTradeStock && selectedTradeStock.id === s.id ? 'selected' : '';
       return `
-        <div class="match-stock-row ${sel}" onclick="Lobby.selectStock(${s.id}, '${s.symbol}', ${s.current_price})">
-          <span class="stock-symbol" style="font-size:0.82rem;">${s.symbol}</span>
-          <span class="stock-name" style="font-size:0.75rem;color:var(--text-muted);"></span>
-          <span class="stock-price mono" style="font-size:0.85rem;">${formatMoney(s.current_price)}</span>
-          <span class="stock-change ${dir}" style="font-size:0.72rem;">${formatPercent(pct)}</span>
-          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); Lobby.openStockModal(${s.id})" style="padding:0.25rem 0.45rem;font-size:0.7rem;" title="View chart">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          </button>
+        <div class="match-stock-card ${sel}" onclick="Lobby.selectStock(${s.id}, '${s.symbol}', ${s.current_price})">
+          <div class="match-stock-card-header">
+            <div style="display:flex;align-items:center;">
+              <span class="match-stock-card-symbol">${s.symbol}</span>
+              <span class="match-stock-card-change ${dir}">${formatPercent(pct)}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.4rem;">
+              <span class="match-stock-card-price">${formatMoney(s.current_price)}</span>
+              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); Lobby.openStockModal(${s.id})" style="padding:0.2rem 0.4rem;" title="Full detail">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="match-stock-chart-wrap">
+            <canvas id="match-chart-${s.id}"></canvas>
+          </div>
         </div>
       `;
     }).join('');
+
+    // Draw charts on each card after HTML is rendered
+    requestAnimationFrame(() => {
+      prices.forEach(s => {
+        const data = stockHistories[s.id] || [];
+        if (data.length > 1) {
+          drawMatchChart(`match-chart-${s.id}`, data);
+        }
+      });
+    });
 
     // Update selected trade stock price if open
     if (selectedTradeStock) {
@@ -1404,11 +1442,68 @@ const Lobby = (() => {
         const held = holdings.find(h => h.stock_id === selectedTradeStock.id);
         document.getElementById('match-trade-holding').textContent =
           held ? `You own: ${held.shares} shares` : 'You own: 0 shares';
-        // Disable sell if 0
         const sellBtn = document.getElementById('match-sell-btn');
         if (sellBtn) sellBtn.disabled = !held || held.shares <= 0;
       }
     }
+  }
+
+  // Draw a line chart inside a match stock card
+  function drawMatchChart(canvasId, data) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || data.length < 2) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    const pad = { top: 8, right: 8, bottom: 8, left: 8 };
+    const w = canvas.width - pad.left - pad.right;
+    const h = canvas.height - pad.top - pad.bottom;
+
+    const min = Math.min(...data) * 0.998;
+    const max = Math.max(...data) * 1.002;
+    const range = max - min || 1;
+
+    const isUp = data[data.length - 1] >= data[0];
+    const lineColor = isUp ? '#22c55e' : '#ef4444';
+    const fillColor = isUp ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+
+    const points = data.map((val, i) => ({
+      x: pad.left + (i / (data.length - 1)) * w,
+      y: pad.top + h - ((val - min) / range) * h,
+    }));
+
+    // Fill area
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, canvas.height - pad.bottom);
+    points.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(points[points.length - 1].x, canvas.height - pad.bottom);
+    ctx.closePath();
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // End dot
+    const last = points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+
+    // Price labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'left';
+    ctx.fillText('$' + max.toFixed(2), pad.left + 2, pad.top + 9);
+    ctx.fillText('$' + min.toFixed(2), pad.left + 2, canvas.height - pad.bottom - 2);
   }
 
   function selectStock(stockId, symbol, price) {
@@ -1418,8 +1513,8 @@ const Lobby = (() => {
     document.getElementById('match-trade-price').textContent = formatMoney(price);
     document.getElementById('match-trade-shares').value = 1;
     updateMatchTradeTotal();
-    // Highlight selected row
-    document.querySelectorAll('.match-stock-row').forEach(r => r.classList.remove('selected'));
+    // Highlight selected card
+    document.querySelectorAll('.match-stock-card').forEach(c => c.classList.remove('selected'));
   }
 
   function closeTrade() {

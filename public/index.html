@@ -426,41 +426,38 @@
             </div>
           </div>
 
-          <div class="match-layout">
-            <!-- Left: Stock list + trade -->
-            <div class="match-stocks-panel">
-              <h3>Stocks</h3>
-              <div id="match-stock-list"></div>
-              <div id="match-trade-panel" style="display:none;">
-                <div class="match-trade-header">
-                  <h4 id="match-trade-symbol">TRADE</h4>
-                  <button class="btn btn-secondary btn-sm" onclick="Lobby.closeTrade()" style="padding:0.3rem 0.5rem;">✕</button>
-                </div>
-                <div class="match-trade-info">
-                  <span id="match-trade-price"></span>
-                  <span id="match-trade-holding" class="text-muted"></span>
-                </div>
-                <div class="match-trade-form">
-                  <input type="number" id="match-trade-shares" min="1" value="1" placeholder="Shares" oninput="Lobby.updateMatchTradeTotal()">
-                  <span class="trade-total mono" id="match-trade-total">$0.00</span>
-                  <div class="match-trade-btns">
-                    <button class="btn btn-primary btn-sm" id="match-buy-btn" onclick="Lobby.matchTrade('buy')">Buy</button>
-                    <button class="btn btn-danger btn-sm" id="match-sell-btn" onclick="Lobby.matchTrade('sell')">Sell</button>
-                  </div>
-                </div>
+          <!-- Stock chart cards grid -->
+          <div class="match-stocks-grid" id="match-stocks-grid"></div>
+
+          <!-- Trade panel (appears when a stock is selected) -->
+          <div id="match-trade-panel" class="match-trade-bar" style="display:none;">
+            <div class="match-trade-header">
+              <h4 id="match-trade-symbol">TRADE</h4>
+              <button class="btn btn-secondary btn-sm" onclick="Lobby.closeTrade()" style="padding:0.3rem 0.5rem;">✕</button>
+            </div>
+            <div class="match-trade-info">
+              <span id="match-trade-price"></span>
+              <span id="match-trade-holding" class="text-muted"></span>
+            </div>
+            <div class="match-trade-form">
+              <input type="number" id="match-trade-shares" min="1" value="1" placeholder="Shares" oninput="Lobby.updateMatchTradeTotal()">
+              <span class="trade-total mono" id="match-trade-total">$0.00</span>
+              <div class="match-trade-btns">
+                <button class="btn btn-primary btn-sm" id="match-buy-btn" onclick="Lobby.matchTrade('buy')">Buy</button>
+                <button class="btn btn-danger btn-sm" id="match-sell-btn" onclick="Lobby.matchTrade('sell')">Sell</button>
               </div>
             </div>
+          </div>
 
-            <!-- Right: Leaderboard + portfolio -->
-            <div class="match-sidebar">
-              <div class="match-rankings-card">
-                <h3>Rankings</h3>
-                <div id="match-rankings"></div>
-              </div>
-              <div class="match-portfolio-card">
-                <h3>Your Holdings</h3>
-                <div id="match-portfolio"></div>
-              </div>
+          <!-- Bottom bar: rankings + portfolio -->
+          <div class="match-bottom-bar">
+            <div class="match-rankings-card">
+              <h3>Rankings</h3>
+              <div id="match-rankings"></div>
+            </div>
+            <div class="match-portfolio-card">
+              <h3>Your Holdings</h3>
+              <div id="match-portfolio"></div>
             </div>
           </div>
         </div>

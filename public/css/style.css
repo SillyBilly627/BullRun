@@ -1048,30 +1048,76 @@ input, button, select { font-family: inherit; }
 
 .match-layout {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 1fr;
   gap: 1rem;
 }
 
-/* Match stocks panel */
-.match-stocks-panel {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-md); padding: 1rem;
-}
-.match-stocks-panel h3 {
-  font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;
-}
-.match-stock-row {
+/* Match stock cards grid — shows all stocks with live charts */
+.match-stocks-grid {
   display: grid;
-  grid-template-columns: 60px 1fr auto auto 36px;
-  align-items: center; gap: 0.75rem;
-  padding: 0.65rem 0.75rem;
-  border-radius: var(--radius-sm); cursor: pointer; transition: background 0.15s;
-  border-bottom: 1px solid var(--border);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
-.match-stock-row:last-child { border-bottom: none; }
-.match-stock-row:hover { background: var(--bg-card-hover); }
-.match-stock-row.selected { background: var(--blue-bg); border-color: rgba(59,130,246,0.2); }
+.match-stock-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 0.75rem;
+  cursor: pointer; transition: all 0.15s;
+}
+.match-stock-card:hover { border-color: var(--border-light); }
+.match-stock-card.selected { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+.match-stock-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+.match-stock-card-symbol {
+  font-family: var(--font-mono); font-weight: 700;
+  font-size: 0.9rem; color: var(--text-primary);
+}
+.match-stock-card-name {
+  font-size: 0.7rem; color: var(--text-dim); margin-left: 0.4rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 120px;
+}
+.match-stock-card-price {
+  font-family: var(--font-mono); font-weight: 600;
+  font-size: 0.95rem; text-align: right;
+}
+.match-stock-card-change {
+  font-family: var(--font-mono); font-size: 0.72rem;
+  font-weight: 500; padding: 0.15rem 0.4rem;
+  border-radius: 4px; margin-left: 0.4rem;
+}
+.match-stock-card-change.up { background: var(--gain-bg); color: var(--gain); }
+.match-stock-card-change.down { background: var(--loss-bg); color: var(--loss); }
+.match-stock-card-change.flat { background: rgba(148,163,184,0.1); color: var(--text-muted); }
+
+/* Inline chart canvas inside each stock card */
+.match-stock-chart-wrap {
+  width: 100%; height: 120px;
+  background: var(--bg-input); border-radius: var(--radius-sm);
+  margin: 0.4rem 0;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.match-stock-chart-wrap canvas { width: 100%; height: 100%; }
+.match-stock-chart-wrap .no-data {
+  font-size: 0.7rem; color: var(--text-dim); font-family: var(--font-mono);
+}
+
+/* Trade bar — appears below stocks when one is selected */
+.match-trade-bar {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Bottom bar: rankings + portfolio side by side */
+.match-bottom-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
 
 /* Match trade panel */
 .match-trade-header {
@@ -1100,8 +1146,7 @@ input, button, select { font-family: inherit; }
 .match-trade-form input:focus { outline: none; border-color: var(--border-focus); }
 .match-trade-btns { display: flex; gap: 0.35rem; }
 
-/* Match sidebar */
-.match-sidebar { display: flex; flex-direction: column; gap: 1rem; }
+/* Match bottom bar cards */
 .match-rankings-card, .match-portfolio-card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-md); padding: 1rem;
@@ -1280,6 +1325,8 @@ input, button, select { font-family: inherit; }
    ============================================================ */
 @media (max-width: 900px) {
   .match-layout { grid-template-columns: 1fr; }
+  .match-bottom-bar { grid-template-columns: 1fr; }
+  .match-stocks-grid { grid-template-columns: 1fr; }
   .lobby-card { grid-template-columns: 1fr auto auto; }
   .lobby-card-reward { display: none; }
   .create-form-row { grid-template-columns: 1fr; }
