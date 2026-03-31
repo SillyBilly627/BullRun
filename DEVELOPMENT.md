@@ -113,6 +113,7 @@ Phase 1 has been tested and confirmed working locally:
 | `lobbies/buy` | POST | Yes | Buy shares of a lobby stock during active match |
 | `lobbies/sell` | POST | Yes | Sell shares of a lobby stock during active match |
 | `lobbies/portfolio` | GET | Yes | Get user's holdings within an active lobby match |
+| `lobbies/stock-detail` | GET | Yes | Get lobby stock detail with full price history for charts |
 | `lobbies/results/:id` | GET | Yes | Get finished match results: placements, rewards, XP, trade stats |
 | `chat/messages` | GET | Yes | Get recent chat messages (supports `?since=` for incremental polling) |
 | `chat/send` | POST | Yes | Send a chat message (200 char max, sanitized, checks chat_banned) |
@@ -171,10 +172,10 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 - [x] **Lobby creation** — player creates a lobby with settings: time limit (5-60 min), max players (2-8), lock toggle, tick speed (3-10 seconds), reward type (money pool OR percentage-based)
 - [x] **Lobby waiting room** — shows all joined players with their levels and Open mode money. Creator can start the match. Auto-refreshes every 3 seconds to detect new players and match start.
 - [x] **Lobby match gameplay** — 5-8 stocks with randomly generated company names per match (40 prefixes × 20 suffixes × 10 sectors). Faster ticks (3-10 sec). Each player starts with $10,000 match money. Separate portfolio/transactions from Open mode.
-- [x] **In-match UI** — stock list with click-to-trade, small leaderboard showing live player net worth rankings, countdown timer (flashes red at <30s), portfolio view, buy/sell interface. Polls every 2 seconds.
+- [x] **In-match UI** — stock list with click-to-trade and chart icon to open full stock detail modal (line/candlestick charts, price history, holdings info, buy/sell forms — same quality as open market), small leaderboard showing live player net worth rankings, countdown timer (flashes red at <30s), portfolio view. Polls every 2 seconds.
 - [x] **Post-game score page** — final rankings with placement emoji, P/L per player, trade count, reward amount won, XP earned. Full results table.
 - [x] **Reward system (money pool)** — all players pay entry fee on join. Pool distributed: 1st=50%, 2nd=30%, 3rd=20%. Rewards go to Open mode balance.
-- [x] **Reward system (percentage)** — 1st gets full %, 2nd gets 60% of that, 3rd gets 30% of that. Based on Open mode balance.
+- [x] **Reward system (percentage)** — fixed tiers: 1st gets +25% of open mode balance, 2nd gets +15%, 3rd gets +7.5%. No custom percentage input — tiers are preset and shown in create modal.
 - [x] **XP from lobbies** — 25 XP participation + 100/60/30 XP for 1st/2nd/3rd + 5 XP per $100 profit
 
 **Global Chat:**
