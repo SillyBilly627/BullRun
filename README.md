@@ -14,10 +14,11 @@ A multiplayer stock market simulator where players trade simulated stocks, compe
 - **Announcements** — admin can post announcements for all players
 
 **Phase 2 — Live Market:**
-- **Stock Price Engine** — prices move every 30 seconds using a random walk algorithm with player buy/sell pressure
-- **Candlestick Charts** — toggle between line chart and real candlestick chart (open, high, low, close)
-- **Watchlist** — pin stocks with the star icon to track them in a dedicated panel
+- **Stock Price Engine** — prices move every 30 seconds using a random walk algorithm with player buy/sell pressure and mean reversion
+- **Candlestick Charts** — toggle between line chart and real candlestick chart (open, high, low, close) with time-based ranges (30m, 1h, 6h, 12h, 24h)
+- **Watchlist** — pin stocks with the star icon to track them in a dedicated panel with mini sparkline charts
 - **Live Auto-Refresh** — prices update in real-time with green/red flash animations
+- **Instant Loading** — stock detail modals open instantly with cached data, charts load in background
 - **Educational Tips** — 12 rotating stock market tips shown contextually throughout the game
 
 ---

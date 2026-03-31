@@ -94,21 +94,23 @@ Phase 1 has been tested and confirmed working locally:
 | Route | Method | Auth | Description |
 |-------|--------|------|-------------|
 | `stocks/tick` | GET | Yes | Poll for price updates — triggers a tick if 30+ seconds have passed, returns all current prices |
-| `watchlist` | GET | Yes | Get user's pinned stocks |
+| `watchlist` | GET | Yes | Get user's pinned stocks with mini sparkline data (last 20 close prices per stock) |
 | `watchlist/toggle` | POST | Yes | Add or remove a stock from watchlist (auto-detects) |
 
 ### Frontend Pages
 
 - **Auth screen** — login/signup with validation and Enter key support
-- **Home page** — welcome card, stats (net worth, cash, level, XP), quick action buttons, market movers, holdings summary
-- **Market page** — searchable stock list, click to open detail modal with buy/sell forms and line chart
-- **Portfolio page** — summary cards (cash, holdings value, net worth, P/L) + individual holdings list
-- **Leaderboard page** — tabbed view (weekly/all-time/level), clickable rows to view profiles
-- **Profile page** — avatar, username, stats grid, holdings list
+- **Home page** — welcome card, stats (net worth, cash, level, XP), quick action buttons, market movers (top 3 gainers + 3 losers), holdings summary
+- **Market page** — searchable stock list with live price updates (10s polling), LIVE indicator badge, watchlist panel with mini sparkline charts, pin/unpin stocks with star icons
+- **Stock detail modal** — instant-loading modal with stock info from cache, async chart loading, line/candlestick chart toggle, time-based range selector (30m/1h/6h/12h/24h), buy/sell forms, holdings info with P/L, educational tips
+- **Portfolio page** — summary cards (cash, holdings value, net worth, P/L) + individual holdings list with per-stock P/L
+- **Leaderboard page** — tabbed view (weekly/all-time/level), clickable rows to view profiles, highlights current user
+- **Profile page** — avatar with initial, username, title, join date, stats grid, holdings list
 - **Lobbies page** — placeholder "Coming Soon"
-- **Toast notifications** — success/error/info toasts with educational tips
-- **Announcement banner** — dismissable top banner
+- **Toast notifications** — success/error/info toasts with educational tips after trades
+- **Announcement banner** — dismissable top banner for admin messages
 - **Loading screen** — animated logo + progress bar on page load
+- **Mobile responsive** — bottom nav bar on small screens, stacked layouts
 
 ### Database Tables Created
 
@@ -119,15 +121,17 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 - **Password rules:** Min 4 chars, at least 1 letter, 1 number, 1 capital
 - **XP formula:** 10 base + 5 per $100 profit on each profitable sell
 - **Level formula:** XP needed for level N = 50 × (N-1) × N / 2
-- **Buy pressure:** When players buy, pressure = (shares × price) / 10000 is added to the stock's buy_pressure field (negative for sells). This is used by the price engine (Phase 2) to bias price movement.
+- **Buy pressure:** When players buy, pressure = (shares × price) / 10000 is added to the stock's buy_pressure field (negative for sells). Pressure decays by 30% each tick (multiplied by 0.7).
+- **Price engine:** Random walk with `crypto.getRandomValues()`. Each tick: random change scaled by volatility + buy pressure effect (×0.001) + mean reversion toward base_price (0.5% pull per tick). 10% chance of momentum spike (2.5x move). Prices clamped between $0.50 and 100× base price. Ticks every 30 seconds via lazy evaluation.
 - **Starting money:** $10,000 (resets weekly)
 - **Session TTL:** 7 days
+- **Chart data:** OHLCV candles recorded each tick. Wicks extend 30% beyond the body for visual variation. History queryable by time range (5 min to 24 hours).
 
 ---
 
-## What's NOT Built Yet (Remaining Phases)
+## Remaining Phases
 
-### Phase 2 — Core Gameplay (Priority: HIGH) ✅ BUILT
+### Phase 2 — Core Gameplay ✅ COMPLETE
 - [x] **Stock price engine** — random walk algorithm using `crypto.getRandomValues()`, incorporates buy_pressure from player activity, mean reversion toward base_price, occasional momentum spikes (10% chance of 2.5x moves)
 - [x] **Stock history recording** — saves OHLCV candles to stock_history table each tick
 - [x] **Candlestick chart toggle** — switch between line chart and candlestick chart in the stock detail modal
@@ -186,6 +190,16 @@ npm run dev          # Start local server on port 8788
 rm -rf .wrangler     # Delete the old database
 npm run setup        # Re-run setup from scratch
 ```
+
+### Pulling updates from GitHub:
+```bash
+git checkout -- setup.sh    # Required: setup.sh gets modified by chmod, must reset before pulling
+git pull origin main        # Pull latest code
+rm -rf .wrangler            # Only if database schema changed (new migration files)
+npm run setup               # Only if database was reset above
+npm run dev                 # Start the server
+```
+Note: If only frontend code changed (JS/CSS/HTML), you can just `git pull` and restart `npm run dev` without resetting the database.
 
 ### Deployment:
 ```bash
