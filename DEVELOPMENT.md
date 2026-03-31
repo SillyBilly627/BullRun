@@ -114,6 +114,7 @@ Phase 1 has been tested and confirmed working locally:
 | `lobbies/sell` | POST | Yes | Sell shares of a lobby stock during active match |
 | `lobbies/portfolio` | GET | Yes | Get user's holdings within an active lobby match |
 | `lobbies/stock-detail` | GET | Yes | Get lobby stock detail with full price history for charts |
+| `lobbies/all-history` | GET | Yes | Batch fetch last 60 price points for all stocks in a lobby (for inline charts) |
 | `lobbies/results/:id` | GET | Yes | Get finished match results: placements, rewards, XP, trade stats |
 | `chat/messages` | GET | Yes | Get recent chat messages (supports `?since=` for incremental polling) |
 | `chat/send` | POST | Yes | Send a chat message (200 char max, sanitized, checks chat_banned) |
@@ -172,7 +173,7 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 - [x] **Lobby creation** — player creates a lobby with settings: time limit (5-60 min), max players (2-8), lock toggle, tick speed (3-10 seconds), reward type (money pool OR percentage-based)
 - [x] **Lobby waiting room** — shows all joined players with their levels and Open mode money. Creator can start the match. Auto-refreshes every 3 seconds to detect new players and match start.
 - [x] **Lobby match gameplay** — 5-8 stocks with randomly generated company names per match (40 prefixes × 20 suffixes × 10 sectors). Faster ticks (3-10 sec). Each player starts with $10,000 match money. Separate portfolio/transactions from Open mode.
-- [x] **In-match UI** — stock list with click-to-trade and chart icon to open full stock detail modal (line/candlestick charts, price history, holdings info, buy/sell forms — same quality as open market), small leaderboard showing live player net worth rankings, countdown timer (flashes red at <30s), portfolio view. Polls every 2 seconds.
+- [x] **In-match UI** — responsive grid of stock cards each with a live line chart (builds in real-time from tick data, loads history on start). Cards show symbol, price, % change, and auto-updating chart with green/red coloring. Click card to trade, click expand icon for full detail modal with candlestick/line toggle. Rankings + portfolio in 2-column bottom bar. Countdown timer flashes red at <30s. Polls every 2 seconds.
 - [x] **Post-game score page** — final rankings with placement emoji, P/L per player, trade count, reward amount won, XP earned. Full results table.
 - [x] **Reward system (money pool)** — all players pay entry fee on join. Pool distributed: 1st=50%, 2nd=30%, 3rd=20%. Rewards go to Open mode balance.
 - [x] **Reward system (percentage)** — fixed tiers: 1st gets +25% of open mode balance, 2nd gets +15%, 3rd gets +7.5%. No custom percentage input — tiers are preset and shown in create modal.
