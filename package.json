@@ -4,6 +4,7 @@
   "description": "BullRun — Multiplayer Stock Market Simulation Game",
   "private": true,
   "scripts": {
+    "setup": "chmod +x setup.sh && ./setup.sh",
     "dev": "npx wrangler pages dev ./public --d1 DB --kv SESSION_STORE --port 8788",
     "deploy": "npx wrangler pages deploy ./public --project-name bullrun",
     "db:migrate:local": "npx wrangler d1 execute DB --local --file=./migrations/0001_initial.sql",

@@ -155,8 +155,14 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 
 ### Local development:
 ```bash
+npm run setup        # First time only — creates DB and runs migrations
 npm run dev          # Start local server on port 8788
-npm run db:migrate:local   # Run migrations locally
+```
+
+### If you need to reset the local database:
+```bash
+rm -rf .wrangler     # Delete the old database
+npm run setup        # Re-run setup from scratch
 ```
 
 ### Deployment:
@@ -164,6 +170,26 @@ npm run db:migrate:local   # Run migrations locally
 npm run deploy              # Deploy to Cloudflare Pages
 npm run db:migrate:remote   # Run migrations on production
 ```
+
+---
+
+## Known Issues & Fixes
+
+### Local database path mismatch (RESOLVED)
+**Problem:** `wrangler d1 execute --local` and `wrangler pages dev` store the local D1 database in different paths inside `.wrangler/`. This caused "no such table" errors because the migration created tables in one database file while the dev server read from a different one.
+
+**Fix:** Created `setup.sh` (run via `npm run setup`) which:
+1. Starts the dev server briefly to let it create the database file
+2. Finds the exact path of that database file
+3. Runs the migration SQL directly into it using `sqlite3`
+4. Stops the server
+
+This ensures the tables are always in the same database file the dev server uses. The `npm run db:migrate:local` command still exists but should NOT be used — always use `npm run setup` for local development.
+
+### School network SSL certificate errors
+**Problem:** School networks with web filtering intercept HTTPS traffic, causing `SELF_SIGNED_CERT_IN_CHAIN` errors when running `npm install`.
+
+**Fix:** Run `npm config set strict-ssl false` before `npm install`. The `self-signed certificate` warnings that appear when starting the dev server are harmless — they're just wrangler trying to fetch metadata from Cloudflare, which isn't needed for local development.
 
 ---
 

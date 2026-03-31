@@ -81,16 +81,17 @@ id = "xyz789..."
 
 **Copy that `id` value** and paste it into `wrangler.toml` where it says `YOUR_KV_NAMESPACE_ID_HERE`.
 
-### Step 4: Set up the database tables
+### Step 4: Set up the local database
 
-Run the migration to create all the tables and seed stocks:
+Run the setup script — this automatically creates the database and loads all tables and stocks:
 
-**For local development:**
 ```bash
-npm run db:migrate:local
+npm run setup
 ```
 
-**For production (after deploying):**
+> **Why a setup script?** Wrangler's migration tool (`d1 execute`) and the dev server (`pages dev`) store the local database in slightly different paths. The setup script handles this by starting the server briefly to create the database file, then runs the SQL migration directly into it. This avoids the "no such table" errors.
+
+**For production (after deploying to Cloudflare):**
 ```bash
 npm run db:migrate:remote
 ```
