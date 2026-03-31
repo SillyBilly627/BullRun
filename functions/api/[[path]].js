@@ -120,6 +120,106 @@ function xpForLevel(level) {
   return 50 * (level - 1) * level / 2;
 }
 
+// ----------------------------------------------------------
+// STOCK PRICE ENGINE — Random Walk + Player Pressure
+// ----------------------------------------------------------
+// This is the heart of the game. Every 30 seconds (configurable),
+// all stock prices update using a random walk algorithm that
+// also factors in player buying/selling pressure.
+//
+// It uses a "lazy tick" approach — prices update whenever any
+// player requests stock data, IF enough time has passed since
+// the last tick. This avoids needing a cron job.
+// ----------------------------------------------------------
+
+async function tickStockPrices(env) {
+  // Check when the last tick happened (stored in KV for speed)
+  const lastTickStr = await env.SESSION_STORE.get('last_stock_tick');
+  const now = Date.now();
+  const tickInterval = 30 * 1000; // 30 seconds between ticks
+
+  if (lastTickStr && (now - parseInt(lastTickStr)) < tickInterval) {
+    return false; // Not time yet
+  }
+
+  // Mark this tick time immediately (prevents double-ticks)
+  await env.SESSION_STORE.put('last_stock_tick', now.toString());
+
+  // Get all active stocks
+  const stocks = await env.DB.prepare(
+    'SELECT * FROM stocks WHERE is_active = 1'
+  ).all();
+
+  // Generate random values for all stocks at once
+  const randomBytes = new Uint32Array(stocks.results.length);
+  crypto.getRandomValues(randomBytes);
+
+  for (let i = 0; i < stocks.results.length; i++) {
+    const stock = stocks.results[i];
+
+    // Convert random uint32 to a number between -1 and 1
+    const random = (randomBytes[i] / 0xFFFFFFFF) * 2 - 1;
+
+    // Base price change from random walk
+    // Volatility controls how much the stock swings per tick
+    let change = random * stock.volatility;
+
+    // Add player pressure effect
+    // buy_pressure is accumulated from player buys (+) and sells (-)
+    // We scale it down so it's a gentle nudge, not a rocket
+    const pressureEffect = stock.buy_pressure * 0.001;
+    change += pressureEffect;
+
+    // Mean reversion — gently pull price back toward base_price
+    // This prevents stocks from going to infinity or zero
+    // The further from base, the stronger the pull
+    const deviation = (stock.current_price - stock.base_price) / stock.base_price;
+    const meanReversion = -deviation * 0.005; // 0.5% pull per tick
+    change += meanReversion;
+
+    // Add occasional momentum (trending days)
+    // 10% chance of a bigger move in the same direction
+    const momentumRoll = new Uint8Array(1);
+    crypto.getRandomValues(momentumRoll);
+    if (momentumRoll[0] < 25) { // ~10% chance
+      change *= 2.5; // Bigger move
+    }
+
+    // Calculate new price
+    let newPrice = stock.current_price * (1 + change);
+
+    // Clamp — stocks can't go below $0.50 or above 100x their base
+    newPrice = Math.max(0.50, Math.min(newPrice, stock.base_price * 100));
+    newPrice = Math.round(newPrice * 100) / 100; // Round to 2 decimals
+
+    // Calculate candle data for this tick
+    // Open = previous close (current_price before update)
+    const open = stock.current_price;
+    const close = newPrice;
+    const high = Math.max(open, close) * (1 + Math.abs(change) * 0.3); // slight wick
+    const low = Math.min(open, close) * (1 - Math.abs(change) * 0.3);  // slight wick
+
+    // Update stock price in database
+    await env.DB.prepare(`
+      UPDATE stocks
+      SET previous_price = current_price,
+          current_price = ?,
+          buy_pressure = buy_pressure * 0.7
+      WHERE id = ?
+    `).bind(newPrice, stock.id).run();
+    // Note: buy_pressure decays by 30% each tick (multiplied by 0.7)
+    // This means pressure fades over time if players stop trading
+
+    // Record price history (candle data)
+    await env.DB.prepare(`
+      INSERT INTO stock_history (stock_id, price, open_price, high_price, low_price, close_price, volume, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now'))
+    `).bind(stock.id, newPrice, open, Math.round(high * 100) / 100, Math.round(low * 100) / 100, close).run();
+  }
+
+  return true; // Tick happened
+}
+
 // ============================================================
 // ROUTE HANDLER
 // ============================================================
@@ -273,6 +373,9 @@ export async function onRequest(context) {
     if (path === 'stocks' && method === 'GET') {
       const user = await getSessionUser(request, env);
       if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      // Run a price tick if enough time has passed
+      await tickStockPrices(env);
 
       const stocks = await env.DB.prepare(
         'SELECT id, symbol, name, sector, current_price, previous_price, base_price, volatility FROM stocks WHERE is_active = 1 ORDER BY symbol'
@@ -593,6 +696,72 @@ export async function onRequest(context) {
         totalStocks: holdings.results.length,
         totalShares: holdings.results.reduce((sum, h) => sum + h.shares, 0)
       });
+    }
+
+    // ======================================
+    // STOCK TICK ENDPOINT (for polling)
+    // ======================================
+
+    // --- POLL FOR PRICE UPDATES ---
+    // Frontend calls this every 10 seconds to get fresh prices
+    if (path === 'stocks/tick' && method === 'GET') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      // Run a tick if enough time has passed
+      const ticked = await tickStockPrices(env);
+
+      // Return all current prices (lightweight — just id, price, previous)
+      const prices = await env.DB.prepare(
+        'SELECT id, symbol, current_price, previous_price FROM stocks WHERE is_active = 1'
+      ).all();
+
+      return jsonResponse({ ticked, prices: prices.results });
+    }
+
+    // ======================================
+    // WATCHLIST
+    // ======================================
+
+    // --- GET USER'S WATCHLIST ---
+    if (path === 'watchlist' && method === 'GET') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      const watchlist = await env.DB.prepare(`
+        SELECT s.id, s.symbol, s.name, s.sector, s.current_price, s.previous_price
+        FROM watchlist w
+        JOIN stocks s ON w.stock_id = s.id
+        WHERE w.user_id = ?
+        ORDER BY s.symbol
+      `).bind(user.id).all();
+
+      return jsonResponse({ watchlist: watchlist.results });
+    }
+
+    // --- ADD/REMOVE FROM WATCHLIST ---
+    if (path === 'watchlist/toggle' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      const body = await request.json();
+      const stockId = parseInt(body.stockId);
+      if (!stockId) return jsonResponse({ error: 'Invalid stock' }, 400);
+
+      // Check if already in watchlist
+      const existing = await env.DB.prepare(
+        'SELECT id FROM watchlist WHERE user_id = ? AND stock_id = ?'
+      ).bind(user.id, stockId).first();
+
+      if (existing) {
+        // Remove from watchlist
+        await env.DB.prepare('DELETE FROM watchlist WHERE user_id = ? AND stock_id = ?').bind(user.id, stockId).run();
+        return jsonResponse({ success: true, action: 'removed' });
+      } else {
+        // Add to watchlist
+        await env.DB.prepare('INSERT INTO watchlist (user_id, stock_id) VALUES (?, ?)').bind(user.id, stockId).run();
+        return jsonResponse({ success: true, action: 'added' });
+      }
     }
 
     // ======================================

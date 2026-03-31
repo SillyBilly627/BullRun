@@ -401,6 +401,7 @@ input, button, select { font-family: inherit; }
   margin-bottom: 1rem;
 }
 .market-header h2 { font-size: 1.4rem; font-weight: 700; }
+.market-controls { display: flex; align-items: center; gap: 0.75rem; }
 .market-search {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.5rem 1rem; background: var(--bg-card);
@@ -415,6 +416,112 @@ input, button, select { font-family: inherit; }
 }
 .market-search input::placeholder { color: var(--text-dim); }
 
+/* Live badge */
+.market-live-badge {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-family: var(--font-mono); font-size: 0.7rem;
+  font-weight: 600; color: var(--gain);
+  background: var(--gain-bg); padding: 0.35rem 0.7rem;
+  border-radius: 20px; border: 1px solid rgba(34,197,94,0.2);
+  letter-spacing: 1px;
+}
+.live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gain);
+  animation: livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+}
+
+/* Watchlist panel */
+.watchlist-container {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); margin-bottom: 1rem;
+  overflow: hidden;
+}
+.watchlist-title {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.6rem 1rem; font-size: 0.75rem; font-weight: 600;
+  color: var(--amber); text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border); margin: 0;
+}
+.watchlist-items { display: flex; overflow-x: auto; gap: 0; }
+.watchlist-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.6rem 1rem; cursor: pointer;
+  border-right: 1px solid var(--border);
+  white-space: nowrap; transition: background 0.15s;
+  min-width: 160px;
+}
+.watchlist-item:hover { background: var(--bg-card-hover); }
+.wl-symbol {
+  font-family: var(--font-mono); font-weight: 600;
+  font-size: 0.82rem; color: var(--text-primary);
+}
+.wl-price {
+  font-family: var(--font-mono); font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.wl-change {
+  font-family: var(--font-mono); font-size: 0.72rem;
+  font-weight: 500;
+}
+.wl-change.up { color: var(--gain); }
+.wl-change.down { color: var(--loss); }
+.wl-change.flat { color: var(--text-muted); }
+
+/* Pin button on stock rows */
+.pin-btn {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-dim); padding: 0.3rem;
+  border-radius: var(--radius-sm); transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.pin-btn:hover { color: var(--amber); }
+.pin-btn.pinned { color: var(--amber); }
+
+/* Larger pin button in modal */
+.pin-btn-lg {
+  display: flex; align-items: center; gap: 0.35rem;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.35rem 0.7rem;
+  color: var(--text-muted); cursor: pointer; font-size: 0.75rem;
+  font-weight: 500; transition: all 0.15s;
+  font-family: var(--font-display);
+}
+.pin-btn-lg:hover { border-color: var(--amber); color: var(--amber); }
+.pin-btn-lg.pinned { border-color: var(--amber); color: var(--amber); background: var(--amber-bg); }
+
+/* Chart controls */
+.chart-controls {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+.chart-toggle-btn {
+  padding: 0.35rem 0.8rem; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: transparent;
+  color: var(--text-muted); cursor: pointer; font-size: 0.75rem;
+  font-weight: 500; transition: all 0.15s;
+  font-family: var(--font-mono);
+}
+.chart-toggle-btn:hover { color: var(--text-secondary); }
+.chart-toggle-btn.active {
+  background: var(--blue-bg); color: var(--blue);
+  border-color: rgba(59,130,246,0.3);
+}
+
+/* Educational tip in modal */
+.stock-edu-tip {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  padding: 0.7rem 1rem; background: rgba(59,130,246,0.06);
+  border: 1px solid rgba(59,130,246,0.12); border-radius: var(--radius-sm);
+  margin-top: 1rem; font-size: 0.75rem; color: var(--text-secondary);
+  line-height: 1.5;
+}
+.stock-edu-tip svg { color: var(--blue); flex-shrink: 0; margin-top: 0.1rem; }
+
 .market-tip {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.7rem 1rem; background: var(--blue-bg);
@@ -428,7 +535,7 @@ input, button, select { font-family: inherit; }
 }
 .stock-row {
   display: grid;
-  grid-template-columns: 80px 1fr auto auto auto;
+  grid-template-columns: 80px 1fr auto auto auto 36px;
   align-items: center; gap: 1rem;
   padding: 0.85rem 1.25rem;
   background: var(--bg-card); border: 1px solid var(--border);

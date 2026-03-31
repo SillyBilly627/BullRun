@@ -135,6 +135,20 @@ const API = (() => {
     return get('announcements');
   }
 
+  // ---- STOCK TICK (polling for live prices) ----
+  async function pollTick() {
+    return get('stocks/tick');
+  }
+
+  // ---- WATCHLIST ----
+  async function getWatchlist() {
+    return get('watchlist');
+  }
+
+  async function toggleWatchlist(stockId) {
+    return post('watchlist/toggle', { stockId });
+  }
+
   // ---- CONFIG ----
   async function getChatStatus() {
     return get('config/chat-status');
@@ -148,5 +162,6 @@ const API = (() => {
     getPortfolio, getTransactions,
     getLeaderboard, getProfile,
     getAnnouncements, getChatStatus,
+    pollTick, getWatchlist, toggleWatchlist,
   };
 })();

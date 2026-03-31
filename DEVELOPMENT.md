@@ -56,7 +56,15 @@ bullrun/
 
 ---
 
-## What's Been Built (Phase 1) ✅
+## What's Been Built (Phase 1) ✅ TESTED & WORKING
+
+Phase 1 has been tested and confirmed working locally:
+- ✅ Account creation and login
+- ✅ Market browsing (smooth and responsive)
+- ✅ Buying and selling stocks
+- ✅ Portfolio tracking with P/L
+- ✅ Leaderboards (all 3 types)
+- ✅ Player profiles
 
 ### Backend API Routes (all in `functions/api/[[path]].js`)
 

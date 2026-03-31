@@ -53,8 +53,11 @@ wait $SERVER_PID 2>/dev/null
 sleep 1
 
 # Step 6: Run the migration SQL directly into the database
-echo "→ Running database migration..."
-sqlite3 "$DB_FILE" < migrations/0001_initial.sql
+echo "→ Running database migrations..."
+for migration in migrations/*.sql; do
+  echo "  Running $migration..."
+  sqlite3 "$DB_FILE" < "$migration"
+done
 
 if [ $? -eq 0 ]; then
   echo ""

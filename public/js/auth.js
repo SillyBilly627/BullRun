@@ -89,6 +89,7 @@ const Auth = (() => {
   // Handle logout
   async function logout() {
     await API.logout();
+    Market.stopPolling(); // Stop auto-refresh
     // Clear local state and show auth screen
     document.getElementById('app-screen').style.display = 'none';
     document.getElementById('app-screen').classList.remove('active');

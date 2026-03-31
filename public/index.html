@@ -236,14 +236,31 @@
       <div id="page-market" class="page">
         <div class="market-header">
           <h2>Open Market</h2>
-          <div class="market-search">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-            <input type="text" id="stock-search" placeholder="Search stocks..." oninput="Market.filterStocks(this.value)">
+          <div class="market-controls">
+            <div class="market-search">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input type="text" id="stock-search" placeholder="Search stocks..." oninput="Market.filterStocks(this.value)">
+            </div>
+            <div class="market-live-badge">
+              <span class="live-dot"></span> LIVE
+            </div>
           </div>
         </div>
+
+        <!-- Watchlist Panel -->
+        <div class="watchlist-container" id="watchlist-container">
+          <h3 class="watchlist-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Watchlist
+          </h3>
+          <div class="watchlist-items" id="watchlist-panel">
+            <p class="placeholder-text" style="padding:0.75rem;">Pin stocks with the ★ icon to track them here</p>
+          </div>
+        </div>
+
         <div class="market-tip" id="market-tip">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-          <span>Tip: In real markets, stock prices change based on supply and demand. Here, prices also react to what players buy and sell!</span>
+          <span>Prices update every 30 seconds. Player buying and selling pressure affects prices — if everyone buys the same stock, it goes up!</span>
         </div>
         <div class="stock-list" id="stock-list">
           <p class="placeholder-text">Loading stocks...</p>

@@ -9,6 +9,8 @@
 let currentUser = null;
 let allStocks = [];
 let currentPage = 'home';
+let pollInterval = null;      // Auto-refresh timer for stock prices
+let watchlistIds = new Set();  // IDs of stocks the user has pinned
 
 // ============================================================
 // TOAST NOTIFICATION SYSTEM
@@ -206,10 +208,12 @@ const App = (() => {
 })();
 
 // ============================================================
-// MARKET — Stock List, Search, Detail Modal
+// MARKET — Stock List, Search, Watchlist, Charts, Auto-Refresh
 // ============================================================
 const Market = (() => {
   let filteredStocks = [];
+  let currentChartType = 'line'; // 'line' or 'candle'
+  let currentDetailStockId = null;
 
   async function load() {
     const res = await API.getStocks();
@@ -218,6 +222,49 @@ const Market = (() => {
       filteredStocks = allStocks;
       render(allStocks);
     }
+    // Load watchlist IDs
+    const wlRes = await API.getWatchlist();
+    if (wlRes.ok) {
+      watchlistIds = new Set(wlRes.data.watchlist.map(w => w.id));
+      renderWatchlist(wlRes.data.watchlist);
+    }
+    // Start auto-refresh polling
+    startPolling();
+  }
+
+  // --- AUTO-REFRESH: poll for price updates every 10 seconds ---
+  function startPolling() {
+    stopPolling(); // Clear any existing interval
+    pollInterval = setInterval(async () => {
+      const res = await API.pollTick();
+      if (res.ok && res.data.prices) {
+        // Update allStocks with new prices
+        const priceMap = {};
+        res.data.prices.forEach(p => { priceMap[p.id] = p; });
+        allStocks = allStocks.map(s => {
+          if (priceMap[s.id]) {
+            return { ...s, previous_price: priceMap[s.id].previous_price, current_price: priceMap[s.id].current_price };
+          }
+          return s;
+        });
+        // Re-render if we're on the market page
+        if (currentPage === 'market') {
+          const q = document.getElementById('stock-search')?.value || '';
+          if (q.trim()) filterStocks(q); else render(allStocks);
+          // Update watchlist too
+          const wlRes = await API.getWatchlist();
+          if (wlRes.ok) renderWatchlist(wlRes.data.watchlist);
+        }
+        // Flash the nav money if it changed
+        if (currentPage === 'home') {
+          App.navigate('home'); // Soft refresh home
+        }
+      }
+    }, 10000); // Every 10 seconds
+  }
+
+  function stopPolling() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
   }
 
   function filterStocks(query) {
@@ -243,6 +290,7 @@ const Market = (() => {
     el.innerHTML = stocks.map(s => {
       const pct = s.previous_price > 0 ? ((s.current_price - s.previous_price) / s.previous_price * 100) : 0;
       const dir = changeClass(s.current_price, s.previous_price);
+      const pinned = watchlistIds.has(s.id);
       return `
         <div class="stock-row" onclick="Market.openDetail(${s.id})">
           <span class="stock-symbol">${s.symbol}</span>
@@ -250,12 +298,57 @@ const Market = (() => {
           <span class="stock-sector">${s.sector}</span>
           <span class="stock-price">${formatMoney(s.current_price)}</span>
           <span class="stock-change ${dir}">${formatPercent(pct)}</span>
+          <button class="pin-btn ${pinned ? 'pinned' : ''}" onclick="event.stopPropagation(); Market.togglePin(${s.id})" title="${pinned ? 'Unpin' : 'Pin to watchlist'}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="${pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </button>
         </div>
       `;
     }).join('');
   }
 
+  // --- WATCHLIST ---
+  function renderWatchlist(watchlist) {
+    const el = document.getElementById('watchlist-panel');
+    if (!el) return;
+    if (watchlist.length === 0) {
+      el.innerHTML = '<p class="placeholder-text" style="padding:0.75rem;">Pin stocks with the ★ icon to track them here</p>';
+      return;
+    }
+    el.innerHTML = watchlist.map(s => {
+      const pct = s.previous_price > 0 ? ((s.current_price - s.previous_price) / s.previous_price * 100) : 0;
+      const dir = changeClass(s.current_price, s.previous_price);
+      return `
+        <div class="watchlist-item" onclick="Market.openDetail(${s.id})">
+          <span class="wl-symbol">${s.symbol}</span>
+          <span class="wl-price">${formatMoney(s.current_price)}</span>
+          <span class="wl-change ${dir}">${formatPercent(pct)}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function togglePin(stockId) {
+    const res = await API.toggleWatchlist(stockId);
+    if (res.ok) {
+      if (res.data.action === 'added') {
+        watchlistIds.add(stockId);
+        showToast('Added to watchlist', 'info');
+      } else {
+        watchlistIds.delete(stockId);
+        showToast('Removed from watchlist', 'info');
+      }
+      // Re-render
+      const q = document.getElementById('stock-search')?.value || '';
+      if (q.trim()) filterStocks(q); else render(allStocks);
+      const wlRes = await API.getWatchlist();
+      if (wlRes.ok) renderWatchlist(wlRes.data.watchlist);
+    }
+  }
+
+  // --- STOCK DETAIL MODAL ---
   async function openDetail(stockId) {
+    currentDetailStockId = stockId;
+    currentChartType = 'line'; // Reset to line on open
     const modal = document.getElementById('stock-modal');
     const content = document.getElementById('stock-detail-content');
     modal.style.display = 'flex';
@@ -271,6 +364,7 @@ const Market = (() => {
     const pct = stock.previous_price > 0 ? ((stock.current_price - stock.previous_price) / stock.previous_price * 100) : 0;
     const dir = changeClass(stock.current_price, stock.previous_price);
     const basePct = stock.base_price > 0 ? ((stock.current_price - stock.base_price) / stock.base_price * 100) : 0;
+    const pinned = watchlistIds.has(stock.id);
 
     content.innerHTML = `
       <div class="stock-detail-header">
@@ -286,10 +380,19 @@ const Market = (() => {
         </div>
       </div>
 
+      <div class="chart-controls">
+        <button class="chart-toggle-btn active" id="btn-line" onclick="Market.setChartType('line')">Line</button>
+        <button class="chart-toggle-btn" id="btn-candle" onclick="Market.setChartType('candle')">Candlestick</button>
+        <button class="pin-btn-lg ${pinned ? 'pinned' : ''}" onclick="Market.togglePin(${stock.id})" title="${pinned ? 'Unpin' : 'Pin to watchlist'}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="${pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          ${pinned ? 'Pinned' : 'Pin'}
+        </button>
+      </div>
+
       <div class="chart-container" id="stock-chart">
-        ${history.length > 0
+        ${history.length > 1
           ? '<canvas id="stock-chart-canvas" style="width:100%;height:100%;"></canvas>'
-          : 'No price history yet — prices update every tick'
+          : '<span>Waiting for price data — prices update every 30 seconds</span>'
         }
       </div>
 
@@ -331,12 +434,25 @@ const Market = (() => {
           </button>
         </div>
       </div>
+
+      <div class="stock-edu-tip">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span>${getRandomTip()}</span>
+      </div>
     `;
 
-    // Draw a simple line chart if we have history
+    // Draw chart if we have history
     if (history.length > 1) {
-      drawLineChart('stock-chart-canvas', history.map(h => h.close_price || h.price));
+      drawChart('stock-chart-canvas', history, currentChartType);
     }
+  }
+
+  function setChartType(type) {
+    currentChartType = type;
+    document.getElementById('btn-line').classList.toggle('active', type === 'line');
+    document.getElementById('btn-candle').classList.toggle('active', type === 'candle');
+    // Redraw by re-opening detail
+    if (currentDetailStockId) openDetail(currentDetailStockId);
   }
 
   function updateTradeTotal(type, pricePerShare) {
@@ -363,14 +479,11 @@ const Market = (() => {
 
     if (res.ok) {
       showToast(res.data.message, 'success', res.data.tip || '');
-      // Update user money
       if (res.data.newBalance !== undefined) {
         currentUser.money = res.data.newBalance;
         App.updateNav();
       }
-      // Refresh the modal
       openDetail(stockId);
-      // Refresh stock list
       load();
     } else {
       showToast(res.data.error || 'Trade failed', 'error');
@@ -379,9 +492,41 @@ const Market = (() => {
 
   function closeModal() {
     document.getElementById('stock-modal').style.display = 'none';
+    currentDetailStockId = null;
   }
 
-  // Simple line chart drawn on a canvas
+  // --- RANDOM EDUCATIONAL TIPS ---
+  function getRandomTip() {
+    const tips = [
+      "A candlestick chart shows four prices per period: open, high, low, and close. Green candles mean the price went up; red means it went down.",
+      "Diversifying means spreading your money across different stocks. If one drops, the others might hold steady.",
+      "In real markets, a 'bull market' means prices are generally rising. A 'bear market' means they're falling.",
+      "The price you see is the 'market price' — what buyers and sellers have agreed on right now.",
+      "Volume means how many shares were traded. High volume often means big news or strong interest.",
+      "A stock's volatility measures how much its price swings. High volatility = bigger potential gains AND losses.",
+      "When you buy low and sell high, the difference is your profit. This is called 'realising a gain.'",
+      "A 'stop loss' is when you sell a falling stock to prevent even bigger losses. Sometimes cutting losses early is smart.",
+      "The P/E ratio (price-to-earnings) tells you how much investors pay per dollar of profit. Lower can mean cheaper.",
+      "Day trading means buying and selling within the same day. It's risky but can be profitable with good timing.",
+      "In real markets, stock prices are affected by company earnings, news, economic data, and investor sentiment.",
+      "Buying pressure from many investors can push a stock's price up — that's supply and demand in action.",
+    ];
+    return tips[Math.floor(Math.random() * tips.length)];
+  }
+
+  // ============================================================
+  // CHART DRAWING — Line Chart & Candlestick Chart
+  // ============================================================
+
+  function drawChart(canvasId, history, type) {
+    if (type === 'candle') {
+      drawCandlestickChart(canvasId, history);
+    } else {
+      drawLineChart(canvasId, history.map(h => h.close_price || h.price));
+    }
+  }
+
+  // --- LINE CHART ---
   function drawLineChart(canvasId, data) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
@@ -390,7 +535,7 @@ const Market = (() => {
     canvas.width = rect.width;
     canvas.height = rect.height;
 
-    const padding = { top: 20, right: 20, bottom: 20, left: 50 };
+    const padding = { top: 20, right: 20, bottom: 20, left: 55 };
     const w = canvas.width - padding.left - padding.right;
     const h = canvas.height - padding.top - padding.bottom;
 
@@ -400,18 +545,29 @@ const Market = (() => {
     const max = Math.max(...data) * 1.002;
     const range = max - min || 1;
 
-    // Map data to points
     const points = data.map((val, i) => ({
       x: padding.left + (i / (data.length - 1)) * w,
       y: padding.top + h - ((val - min) / range) * h,
     }));
 
-    // Determine color based on trend
     const isUp = data[data.length - 1] >= data[0];
     const lineColor = isUp ? '#22c55e' : '#ef4444';
     const fillColor = isUp ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
 
-    // Draw fill
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px JetBrains Mono';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const val = min + (range * i / 4);
+      const y = padding.top + h - (h * i / 4);
+      ctx.fillText('$' + val.toFixed(2), padding.left - 8, y + 3);
+      ctx.beginPath(); ctx.moveTo(padding.left, y); ctx.lineTo(canvas.width - padding.right, y); ctx.stroke();
+    }
+
+    // Fill area
     ctx.beginPath();
     ctx.moveTo(points[0].x, canvas.height - padding.bottom);
     points.forEach(p => ctx.lineTo(p.x, p.y));
@@ -420,42 +576,106 @@ const Market = (() => {
     ctx.fillStyle = fillColor;
     ctx.fill();
 
-    // Draw line
+    // Line
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      ctx.lineTo(points[i].x, points[i].y);
-    }
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
     ctx.strokeStyle = lineColor;
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Draw current price dot
+    // End dot
     const last = points[points.length - 1];
     ctx.beginPath();
     ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
     ctx.fillStyle = lineColor;
     ctx.fill();
+  }
 
-    // Draw Y-axis labels
+  // --- CANDLESTICK CHART ---
+  function drawCandlestickChart(canvasId, history) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    const padding = { top: 20, right: 20, bottom: 20, left: 55 };
+    const w = canvas.width - padding.left - padding.right;
+    const h = canvas.height - padding.top - padding.bottom;
+
+    if (history.length < 2) return;
+
+    // Find price range across all candles
+    let allMin = Infinity, allMax = -Infinity;
+    history.forEach(c => {
+      allMin = Math.min(allMin, c.low_price || c.price);
+      allMax = Math.max(allMax, c.high_price || c.price);
+    });
+    allMin *= 0.998;
+    allMax *= 1.002;
+    const range = allMax - allMin || 1;
+
+    // Helper: price to Y coordinate
+    const priceToY = (price) => padding.top + h - ((price - allMin) / range) * h;
+
+    // Grid lines and Y labels
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
     ctx.fillStyle = '#64748b';
     ctx.font = '10px JetBrains Mono';
     ctx.textAlign = 'right';
     for (let i = 0; i <= 4; i++) {
-      const val = min + (range * i / 4);
+      const val = allMin + (range * i / 4);
       const y = padding.top + h - (h * i / 4);
       ctx.fillText('$' + val.toFixed(2), padding.left - 8, y + 3);
-      // Grid line
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.beginPath(); ctx.moveTo(padding.left, y); ctx.lineTo(canvas.width - padding.right, y); ctx.stroke();
+    }
+
+    // Draw each candle
+    const candleCount = history.length;
+    const totalWidth = w;
+    const candleSpacing = totalWidth / candleCount;
+    const candleWidth = Math.max(2, Math.min(12, candleSpacing * 0.6));
+
+    history.forEach((candle, i) => {
+      const open = candle.open_price || candle.price;
+      const close = candle.close_price || candle.price;
+      const high = candle.high_price || Math.max(open, close);
+      const low = candle.low_price || Math.min(open, close);
+
+      const isGreen = close >= open;
+      const color = isGreen ? '#22c55e' : '#ef4444';
+
+      const x = padding.left + (i + 0.5) * candleSpacing;
+      const yOpen = priceToY(open);
+      const yClose = priceToY(close);
+      const yHigh = priceToY(high);
+      const yLow = priceToY(low);
+
+      // Draw the wick (high-low line)
+      ctx.strokeStyle = color;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(padding.left, y);
-      ctx.lineTo(canvas.width - padding.right, y);
+      ctx.moveTo(x, yHigh);
+      ctx.lineTo(x, yLow);
       ctx.stroke();
-    }
+
+      // Draw the body (open-close rectangle)
+      const bodyTop = Math.min(yOpen, yClose);
+      const bodyHeight = Math.max(1, Math.abs(yOpen - yClose));
+      ctx.fillStyle = isGreen ? color : color;
+      ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+
+      // Body border for definition
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+    });
   }
 
-  return { load, filterStocks, openDetail, closeModal, updateTradeTotal, executeTrade };
+  return { load, filterStocks, openDetail, closeModal, updateTradeTotal, executeTrade, togglePin, setChartType, startPolling, stopPolling };
 })();
 
 // ============================================================
