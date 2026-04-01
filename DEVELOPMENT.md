@@ -36,27 +36,39 @@
 bullrun/
 ├── .gitignore
 ├── setup.sh                  # Local dev setup script (use npm run setup)
-├── package.json              # Scripts: setup, dev, deploy, db:migrate:local, db:migrate:remote
+├── package.json              # Scripts: setup, dev, deploy
 ├── wrangler.toml             # Cloudflare config (D1 + KV bindings)
-├── README.md                 # User-facing setup instructions
+├── README.md                 # User-facing setup + deployment instructions
 ├── DEVELOPMENT.md            # THIS FILE — project status for AI context
+├── Start Server (Mac).command    # Double-click launcher (Mac)
+├── Start Server (Windows).bat    # Double-click launcher (Windows)
+├── Fresh Start (Mac).command     # Wipe + restart launcher (Mac)
+├── Fresh Start (Windows).bat     # Wipe + restart launcher (Windows)
+├── BullRunApp/               # Native Swift wrapper app
+│   ├── BullRunApp.xcodeproj  # Open in Xcode to build macOS/iOS app
+│   └── BullRunApp/
+│       ├── BullRunAppApp.swift     # SwiftUI entry point
+│       ├── ContentView.swift       # Main view + server URL config
+│       ├── BullRunWebView.swift    # WKWebView wrapper (macOS + iOS)
+│       ├── Info.plist              # App Transport Security for localhost
+│       └── Assets.xcassets         # App icon assets
 ├── migrations/
 │   ├── 0001_initial.sql      # Full DB schema + seed data (35 base stocks)
 │   ├── 0002_watchlist.sql    # Watchlist table + tick tracking config
 │   ├── 0003_lobby_stock_history.sql  # Lobby stock price history table
-│   └── 0004_seed_cosmetics.sql      # Seed cosmetic items (battle pass + crate)
+│   ├── 0004_seed_cosmetics.sql      # Seed cosmetic items (battle pass + crate)
 │   └── 0005_extended_content.sql    # Extended BP to Lv250 + 35 more stocks
 ├── functions/
 │   └── api/
-│       └── [[path]].js       # ALL backend API routes (~2200 lines, single file)
+│       └── [[path]].js       # ALL backend API routes (~2300 lines, single file)
 └── public/
-    ├── index.html            # Main HTML shell — SPA pages, modals, chat panel (~560 lines)
+    ├── index.html            # Main HTML shell — SPA pages, modals, chat panel (~750 lines)
     ├── css/
-    │   └── style.css         # All styles (~1340 lines) — dark terminal theme
+    │   └── style.css         # All styles (~1800 lines) — dark terminal theme
     └── js/
-        ├── api.js            # API module — fetch wrapper + all endpoint functions (~240 lines)
+        ├── api.js            # API module — fetch wrapper + all endpoint functions (~330 lines)
         ├── auth.js           # Auth module — login/signup/logout/session check (~130 lines)
-        └── app.js            # Main app — Nav, Market, Portfolio, Leaderboard, Profile, Lobby, Chat modules (~2080 lines)
+        └── app.js            # Main app — all modules + Glossary, Admin, Cosmetics (~2900 lines)
 ```
 
 ---
@@ -278,6 +290,21 @@ Users, stocks (70 total: 32 real + 38 fictional), portfolios, transactions, stoc
 - Battle pass auto-unlock: `cosmetics/check-unlocks` finds all `source='battlepass'` items where `battlepass_level <= user.level` and not in `user_cosmetics`, then inserts them. Called on Locker page load.
 - Crate spin reel: backend generates 20-item array, places the won item at position 15. Frontend animates with CSS `transform: translateX()` and cubic-bezier easing over 4 seconds, then shows result card after 4.2s delay.
 - Weekly reset is destructive: clears portfolios, transactions, stock_history tables. Resets all user money and stock prices. Double confirmation required in admin UI.
+
+**Architecture notes for Educational Features:**
+- Glossary page (`page-glossary`): 50 terms defined in the `Glossary` JS module as a static `TERMS` array. Each term has `term`, `definition`, and `category` fields. Categories: basics, trading, analysis, market, slang. Rendered client-side with search + category filter.
+- Educational tooltips use a JS-positioned system (not CSS `::after`) to avoid clipping by `overflow: hidden` parents. A single `<div class="edu-tooltip-popup">` is appended to `<body>` with `position: fixed`. Event listeners on `mouseover`/`mouseout` for `.edu-tip` elements position it below the icon, flipping above if near viewport bottom, clamping horizontally.
+- Post-trade tips: `getBuyTip()` and `getSellTip()` functions in the backend generate context-aware tips. They check trade context (concentration risk if >50% spent, volatile stock, partial profit, full position close) before falling back to random tips from curated arrays (10 buy, 6 profit sell, 5 loss sell).
+
+**Architecture notes for Native Swift App:**
+- Located in `BullRunApp/` folder with its own `BullRunApp.xcodeproj`.
+- Single multiplatform target: macOS 13+, iOS 16+, iPadOS. Uses `SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx"`.
+- 3 Swift files: `BullRunAppApp.swift` (entry point), `ContentView.swift` (URL config UI), `BullRunWebView.swift` (WKWebView wrapper).
+- `BullRunWebView` uses `NSViewRepresentable` on macOS and `UIViewRepresentable` on iOS via `#if os(macOS)` conditional compilation.
+- `Info.plist` sets `NSAllowsLocalNetworking = true` for App Transport Security so WKWebView can load `http://localhost:8788`.
+- Server URL is configurable via gear icon → settings sheet. Defaults to `http://localhost:8788`.
+- If the server is unreachable, `didFailProvisionalNavigation` delegate method loads a friendly HTML error page with instructions.
+- `Coordinator` class injects custom CSS on macOS after page load for thinner scrollbars.
 
 ---
 

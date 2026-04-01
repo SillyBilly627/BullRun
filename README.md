@@ -29,6 +29,18 @@ A multiplayer stock market simulator built as a school project. Players trade si
 - Announcement banners from admins
 - Educational tips about real stock trading concepts
 
+**Educational**
+- Trading glossary with 50 real terms across 5 categories (Basics, Trading, Analysis, Market, Slang)
+- Searchable with category filters — accessible from home page and nav bar
+- Info tooltips (ⓘ) throughout the app explaining concepts like net worth, P/L, volatility, cost basis, and chart types
+- Context-aware post-trade tips that teach real trading concepts based on what you just did
+
+**Native Apps**
+- macOS and iOS/iPadOS wrapper app built with SwiftUI + WKWebView
+- Xcode project in the `BullRunApp/` folder — open and press Run
+- Configurable server URL (localhost for testing, Cloudflare URL for deployed)
+- Friendly error page when server is unreachable
+
 **Admin Panel**
 - Hidden access (click the logo 5 times, password: `BullRun2026!`)
 - Ban/unban players, manipulate money/XP/stock prices, push announcements
@@ -216,6 +228,34 @@ If new migration files were added, run those too (Step 5 commands for the new fi
 
 ---
 
+## Native App (macOS / iOS / iPadOS)
+
+The `BullRunApp/` folder contains an Xcode project that wraps BullRun in a native app using SwiftUI and WKWebView. This is optional — the game works perfectly in any browser.
+
+### Requirements
+
+- **Xcode** (free from the Mac App Store)
+- BullRun server running locally (`npm run dev`) or deployed to Cloudflare
+
+### Running the macOS App
+
+1. Make sure the BullRun server is running (`npm run dev`)
+2. Open `BullRunApp/BullRunApp.xcodeproj` in Xcode (double-click it)
+3. At the top of Xcode, make sure **"My Mac"** is selected as the run destination
+4. Press the **▶️ Play** button (or Cmd+R)
+5. BullRun opens as a native Mac app!
+
+### Running on iPhone/iPad Simulator
+
+1. Same as above, but select an **iPhone** or **iPad** simulator from the device dropdown instead of "My Mac"
+2. The server must be running on your Mac — the simulator can access `localhost`
+
+### Connecting to a Deployed Server
+
+If BullRun is deployed to Cloudflare, tap the **⚙️ gear icon** in the top-right corner of the app and enter your URL (e.g. `https://bullrun.pages.dev`).
+
+---
+
 ## Project Structure
 
 ```
@@ -228,6 +268,14 @@ bullrun/
 ├── wrangler.toml               # Cloudflare config (D1 + KV bindings)
 ├── setup.sh                    # Local database setup script
 ├── DEVELOPMENT.md              # Full development context for AI sessions
+├── BullRunApp/                 # Native Swift wrapper app (Xcode project)
+│   ├── BullRunApp.xcodeproj    # Open this in Xcode
+│   └── BullRunApp/
+│       ├── BullRunAppApp.swift     # App entry point
+│       ├── ContentView.swift       # Main view + URL settings
+│       ├── BullRunWebView.swift    # WKWebView wrapper (macOS + iOS)
+│       ├── Info.plist              # Allows localhost HTTP
+│       └── Assets.xcassets         # App icon (add your own!)
 ├── migrations/
 │   ├── 0001_initial.sql        # Database schema + 35 base stocks
 │   ├── 0002_watchlist.sql      # Watchlist table
@@ -236,15 +284,15 @@ bullrun/
 │   └── 0005_extended_content.sql     # Extended BP (Lv250) + 35 more stocks
 ├── functions/
 │   └── api/
-│       └── [[path]].js         # ALL backend API routes (~2200 lines)
+│       └── [[path]].js         # ALL backend API routes (~2300 lines)
 └── public/
     ├── index.html              # Main HTML (single-page app)
     ├── css/
-    │   └── style.css           # All styles (~1700 lines)
+    │   └── style.css           # All styles (~1800 lines)
     └── js/
         ├── api.js              # API communication layer
         ├── auth.js             # Login/signup/session logic
-        └── app.js              # All pages, modules, charts (~2700 lines)
+        └── app.js              # All pages, modules, charts (~2900 lines)
 ```
 
 ---
