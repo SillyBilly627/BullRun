@@ -293,6 +293,17 @@ async function tickStockPrices(env) {
     `).bind(stock.id, newPrice, open, Math.round(high * 100) / 100, Math.round(low * 100) / 100, close).run();
   }
 
+  // Periodic cleanup: delete stock_history older than 24 hours
+  // Only runs ~every 20 ticks (10 minutes) to avoid overhead
+  const cleanupKey = await env.SESSION_STORE.get('last_history_cleanup');
+  const cleanupInterval = 600 * 1000; // 10 minutes
+  if (!cleanupKey || (now - parseInt(cleanupKey)) > cleanupInterval) {
+    await env.SESSION_STORE.put('last_history_cleanup', now.toString());
+    await env.DB.prepare(
+      "DELETE FROM stock_history WHERE timestamp < datetime('now', '-24 hours')"
+    ).run();
+  }
+
   return true; // Tick happened
 }
 
@@ -1071,10 +1082,10 @@ export async function onRequest(context) {
         ORDER BY s.symbol
       `).bind(user.id).all();
 
-      // Fetch price history (last 60 points with OHLC) for each watchlist stock
+      // Fetch price history (last 40 points with OHLC) for each watchlist stock
       const withSparklines = await Promise.all(watchlist.results.map(async (stock) => {
         const hist = await env.DB.prepare(
-          'SELECT price, open_price, high_price, low_price, close_price, timestamp FROM stock_history WHERE stock_id = ? ORDER BY timestamp DESC LIMIT 60'
+          'SELECT price, open_price, high_price, low_price, close_price, timestamp FROM stock_history WHERE stock_id = ? ORDER BY timestamp DESC LIMIT 40'
         ).bind(stock.id).all();
         return {
           ...stock,
