@@ -46,15 +46,15 @@ bullrun/
 │   └── 0003_lobby_stock_history.sql  # Lobby stock price history table
 ├── functions/
 │   └── api/
-│       └── [[path]].js       # ALL backend API routes (single file)
+│       └── [[path]].js       # ALL backend API routes (~1750 lines, single file)
 └── public/
-    ├── index.html            # Main HTML shell (SPA)
+    ├── index.html            # Main HTML shell — SPA pages, modals, chat panel (~560 lines)
     ├── css/
-    │   └── style.css         # All styles (~600 lines)
+    │   └── style.css         # All styles (~1340 lines) — dark terminal theme
     └── js/
-        ├── api.js            # Fetch wrapper, all API endpoint functions
-        ├── auth.js           # Login/signup/logout/session check
-        └── app.js            # Navigation, pages, Market, Portfolio, Leaderboard, Profile modules
+        ├── api.js            # API module — fetch wrapper + all endpoint functions (~240 lines)
+        ├── auth.js           # Auth module — login/signup/logout/session check (~130 lines)
+        └── app.js            # Main app — Nav, Market, Portfolio, Leaderboard, Profile, Lobby, Chat modules (~2080 lines)
 ```
 
 ---
@@ -128,8 +128,13 @@ Phase 1 has been tested and confirmed working locally:
 - **Portfolio page** — summary cards (cash, holdings value, net worth, P/L) + individual holdings list with per-stock P/L
 - **Leaderboard page** — tabbed view (weekly/all-time/level), clickable rows to view profiles, highlights current user
 - **Profile page** — avatar with initial, username, title, join date, stats grid, holdings list
-- **Lobbies page** — lobby browser (lists all open/active lobbies as cards), create lobby modal (name, time, players, tick speed, lock, reward type with pool/percentage options), waiting room (live player list with 3s polling, settings tags, host start controls, leave button), active match UI (stock list with click-to-trade, live leaderboard sidebar, countdown timer with urgent flash at <30s, portfolio sidebar, buy/sell panel), post-game results screen (placement with emoji, rewards, XP, full rankings table with trade stats)
-- **Global chat panel** — collapsible bottom-right panel visible on all pages, 4-second polling for new messages, unread badge when minimized, timestamps, user levels displayed, send with Enter key, checks chat_enabled config
+- **Lobbies page** — full lobby system with 4 sub-views:
+  - *Browser:* lists all open/active lobbies as clickable cards (name, creator, settings, player count, reward type). Create Lobby button opens modal.
+  - *Create modal:* name, match length (5-60 min), max players (2-8), tick speed (3-10s), locked/open, reward type. Pool mode has entry fee input; Percentage mode shows fixed tier breakdown (25%/15%/7.5%).
+  - *Waiting room:* live player list (3s polling), settings tags, host-only Start button, leave button. Auto-detects when match starts.
+  - *Active match:* responsive grid of stock cards each with a **live inline chart** (line or candlestick, toggled via button in top bar). Charts store full OHLCV data, build in real-time, and load history on match start. Click a card to select it for trading (trade bar appears). Click expand icon (↗) for full-screen stock detail modal with bigger chart + buy/sell forms. Rankings + portfolio in 2-column bottom bar. Client-side 1-second countdown timer (synced from server every 2s). Flashes red at <30s. Tick + portfolio fetched in parallel via Promise.all. Overlap guard prevents stacking requests.
+  - *Post-game results:* placement emoji, reward earned, XP earned, full results table with every player's final money, profit, trade count, reward, XP.
+- **Global chat panel** — collapsible bottom-right panel visible on all pages after login, 4-second polling with incremental `?since=` parameter, unread badge when minimized, timestamps, user levels, send with Enter key, checks chat_enabled config
 - **XP progress bar** — shown in nav bar next to level badge, shows current XP / XP needed for next level with gradient fill bar
 - **Toast notifications** — success/error/info toasts with educational tips after trades
 - **Announcement banner** — dismissable top banner for admin messages
@@ -173,7 +178,7 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 - [x] **Lobby creation** — player creates a lobby with settings: time limit (5-60 min), max players (2-8), lock toggle, tick speed (3-10 seconds), reward type (money pool OR percentage-based)
 - [x] **Lobby waiting room** — shows all joined players with their levels and Open mode money. Creator can start the match. Auto-refreshes every 3 seconds to detect new players and match start.
 - [x] **Lobby match gameplay** — 5-8 stocks with randomly generated company names per match (40 prefixes × 20 suffixes × 10 sectors). Faster ticks (3-10 sec). Each player starts with $10,000 match money. Separate portfolio/transactions from Open mode.
-- [x] **In-match UI** — responsive grid of stock cards each with a live line chart (builds in real-time from tick data, loads history on start). Cards show symbol, price, % change, and auto-updating chart with green/red coloring. Click card to trade, click expand icon for full detail modal with candlestick/line toggle. Rankings + portfolio in 2-column bottom bar. Countdown timer flashes red at <30s. Polls every 2 seconds.
+- [x] **In-match UI** — responsive grid of stock cards each with a live chart (line or candlestick, toggled via top bar button). Charts store OHLCV data, build in real-time from tick data, and load full history on match start via `lobbies/all-history` endpoint. Click card to trade, click expand icon for full detail modal. Rankings + portfolio in 2-column bottom bar. Client-side 1-second countdown timer (server-synced every 2s, flashes red at <30s). Tick + portfolio fetched in parallel. Overlap guard prevents stacking. Multi-tab chart sync fixed (uses price comparison, not ticked flag).
 - [x] **Post-game score page** — final rankings with placement emoji, P/L per player, trade count, reward amount won, XP earned. Full results table.
 - [x] **Reward system (money pool)** — all players pay entry fee on join. Pool distributed: 1st=50%, 2nd=30%, 3rd=20%. Rewards go to Open mode balance.
 - [x] **Reward system (percentage)** — fixed tiers: 1st gets +25% of open mode balance, 2nd gets +15%, 3rd gets +7.5%. No custom percentage input — tiers are preset and shown in create modal.
@@ -194,17 +199,37 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 - Chat uses incremental polling: first load gets last 50 messages, subsequent polls use `?since=` timestamp to only fetch new messages.
 - Lobby stocks use `lobby_stocks` table (separate from main `stocks`). Lobby stock history in `lobby_stock_history` table (migration 0003).
 - Random company names: 40 prefixes × 20 suffixes with collision detection. Symbols are first 2 chars of prefix + first 2 chars of suffix, uppercased.
-- Lobby price engine: more volatile than Open mode (volatility 0.03-0.08, 15% momentum chance at 3x multiplier, weaker mean reversion, faster pressure decay at 0.6).
+- Lobby price engine: more volatile than Open mode (volatility 0.03-0.08, 15% momentum chance at 3x multiplier, weaker mean reversion 0.3%, faster pressure decay ×0.6).
+- **Multi-tab chart sync:** Charts append new data when `current_price !== lastRecordedClose`, NOT based on the `ticked` flag. This ensures all browser tabs update charts even when only one tab triggers the actual tick.
+- **Performance optimizations:** tick + portfolio calls run in parallel via `Promise.all`. A `matchPolling` guard (try/finally) prevents overlapping requests. Client-side 1-second timer runs independently for smooth countdown; server syncs the authoritative time every 2 seconds.
+- **Inline chart data:** stockHistories stores OHLCV objects `{open, high, low, close}` so both line and candlestick views work on the inline cards.
 
-### Phase 4 — Polish & Extras (Priority: LOW)
-- [ ] **Cosmetics system** — titles, profile backgrounds, leaderboard card styles, visual effects. Items stored in `cosmetics` table, ownership in `user_cosmetics` table. Users equip via `equipped_title`, `equipped_background`, `equipped_card_style` fields on users table.
-- [ ] **Battle pass** — progression track tied to leveling. As players level up, they unlock cosmetic items from a predefined list. Uses `battlepass_level` field in `cosmetics` table.
-- [ ] **Crate spin** — after winning Closed mode matches, players get a crate spin from a separate pool of cosmetics NOT in the battle pass. Higher placement = better chances at rare items. Uses `source` field ('battlepass' vs 'crate') in `cosmetics` table. Rarities: common, uncommon, rare, epic, legendary.
-- [ ] **Cosmetics page** — dedicated page for previewing and equipping cosmetics before applying them
-- [ ] **Admin panel** — hidden/secret button + admin password (stored in `game_config` table, default 'BullRun2026!'). Features: view all connected players and IPs, ban accounts/IPs (uses `bans` table), push announcements, manipulate stock prices/player levels/money/cosmetics, view and force-close active lobbies, enable/disable global chat, clear chat history, ban players from chat individually
-- [ ] **Educational features** — tooltips throughout the app explaining stock concepts, glossary page with trading terminology, contextual hints (e.g., "In real life, this is called a market order"), post-trade summaries explaining real-world equivalents
-- [ ] **Security review** — rate limiting, input validation audit, XSS prevention audit
-- [ ] **Native Swift wrapper apps** — macOS + iOS/iPadOS using WKWebView in SwiftUI (stretch goal, only if time allows)
+### Phase 4 — Polish & Extras (Priority: NEXT)
+
+**Cosmetics system:**
+- [ ] **Seed cosmetics into DB** — populate the `cosmetics` table with items. The table already exists with columns: `name`, `type` ('title'/'background'/'card_style'/'effect'), `rarity` ('common'/'uncommon'/'rare'/'epic'/'legendary'), `description`, `css_value` (the actual CSS class/value to apply), `source` ('battlepass'/'crate'), `battlepass_level` (null for crate items). CSS rarity colors already defined in `:root`: `--common` (#94a3b8), `--uncommon` (#22c55e), `--rare` (#3b82f6), `--epic` (#a855f7), `--legendary` (#f59e0b).
+- [ ] **Equip cosmetics** — API routes to equip/unequip. Users table already has `equipped_title`, `equipped_background`, `equipped_card_style` fields. The `user_cosmetics` table tracks ownership (`user_id`, `cosmetic_id`, `equipped`, `obtained_at`).
+- [ ] **Cosmetics page** — dedicated page for previewing and equipping owned cosmetics. Add a nav tab or button on profile page.
+- [ ] **Visual application** — apply equipped cosmetics: titles show on profile/leaderboard/chat, backgrounds change profile card gradient, card_styles change leaderboard row appearance.
+
+**Battle pass (tied to leveling):**
+- [ ] **Battle pass track** — as players level up, they automatically unlock cosmetic items where `source='battlepass'` and `battlepass_level <= player_level`. Show a progression UI with locked/unlocked items.
+- [ ] **Leveling milestones** — visual notification when a new item is unlocked. Could be a modal or special toast.
+
+**Crate spin (tied to lobby wins):**
+- [ ] **Crate spin UI** — after winning a Closed mode match (top 3 placement), players get a crate spin animation. Items come from cosmetics where `source='crate'`. Higher placement = better rarity chances.
+- [ ] **Rarity weights** — common: 50%, uncommon: 25%, rare: 15%, epic: 8%, legendary: 2% (adjust for placement bonus).
+
+**Admin panel:**
+- [ ] **Hidden access** — secret button (e.g., click logo 5 times, or a hidden nav item) + admin password prompt. Password stored in `game_config` table as `admin_password` (default 'BullRun2026!'). The `is_admin` field on users can also be used.
+- [ ] **Admin features:** view all connected players and IPs, ban accounts/IPs (uses `bans` table with `user_id`, `ip_address`, `reason`, `banned_by`, `created_at`), push announcements (insert into `announcements` table), manipulate stock prices/player levels/money/cosmetics, view and force-close active lobbies, enable/disable global chat (update `game_config` key `chat_enabled`), clear chat history (DELETE FROM chat_messages), ban players from chat individually (set `chat_banned=1` on users table).
+- [ ] **Admin API routes** — all admin routes should verify `is_admin=1` on the user OR check a provided admin password against `game_config.admin_password`.
+
+**Other Phase 4 items:**
+- [ ] **Weekly reset** — scheduled job to reset all player money to $10,000 and stock prices to base. Needs either a Cloudflare Cron Trigger or a manual admin button in the admin panel.
+- [ ] **Educational features** — tooltips throughout the app explaining stock concepts, glossary page with trading terminology, contextual hints, post-trade summaries explaining real-world equivalents.
+- [ ] **Security review** — rate limiting, input validation audit, XSS prevention audit.
+- [ ] **Native Swift wrapper apps** — macOS + iOS/iPadOS using WKWebView in SwiftUI (stretch goal, only if time allows).
 
 ---
 
@@ -259,20 +284,38 @@ npm run db:migrate:remote   # Run migrations on production
 
 **Fix:** Created `setup.sh` (run via `npm run setup`) which:
 1. Starts the dev server briefly to let it create the database file
-2. Finds the exact path of that database file
+2. Finds the exact path of that database file (by checking SQLite file headers, not file extensions — newer wrangler versions don't use `.sqlite` extensions)
 3. Runs the migration SQL directly into it using `sqlite3`
 4. Stops the server
 
 This ensures the tables are always in the same database file the dev server uses. The `npm run db:migrate:local` command still exists but should NOT be used — always use `npm run setup` for local development.
 
-### School network SSL certificate errors
+### School network SSL certificate errors (RESOLVED)
 **Problem:** School networks with web filtering intercept HTTPS traffic, causing `SELF_SIGNED_CERT_IN_CHAIN` errors when running `npm install`.
 
 **Fix:** Run `npm config set strict-ssl false` before `npm install`. The `self-signed certificate` warnings that appear when starting the dev server are harmless — they're just wrangler trying to fetch metadata from Cloudflare, which isn't needed for local development.
 
+### Multi-tab lobby chart freeze (RESOLVED)
+**Problem:** When 2+ browser tabs poll the same lobby match, only one tab's request triggers the actual price tick (via KV last-tick check). The other tab received `ticked=false` and the old code only appended chart data when `ticked=true`, so that tab's charts froze while price text still updated.
+
+**Fix:** Changed chart data logic to compare `current_price !== lastRecordedClose` instead of checking the `ticked` flag. Both tabs now see the new price and append the data point regardless of which triggered the tick.
+
+### Lobby timer skipping seconds (RESOLVED)
+**Problem:** The countdown timer in lobby matches only updated when the server poll response arrived (every ~2 seconds), making it visibly skip seconds.
+
+**Fix:** Added a client-side `setInterval` that decrements `matchTimeLeft` every 1 second independently. The server response syncs the authoritative time every 2 seconds to prevent drift, but the display is always smooth.
+
+### Lobby poll latency (RESOLVED)
+**Problem:** Each poll cycle ran tick and portfolio API calls sequentially, doubling the wait time.
+
+**Fix:** Both calls now run in parallel via `Promise.all([API.lobbyTick(), API.getLobbyPortfolio()])`. Added a `matchPolling` boolean guard with `try/finally` to prevent overlapping requests if a response is slow.
+
 ---
 
 ## Important Notes for AI Assistants
+
+### DOCUMENTATION MANDATE
+**After completing ANY feature, fix, or change — no matter how small — you MUST update this DEVELOPMENT.md file before committing.** Add the change to the relevant section (checklist, architecture notes, known issues, etc.) so the next session has complete context. Xavier cannot do this himself. If you skip this step, the next session will be working blind.
 
 ### About Xavier
 - Xavier is NOT a coder. Write all code yourself. Give complete files, not snippets.
@@ -287,8 +330,40 @@ This ensures the tables are always in the same database file the dev server uses
 - Use CSS variables defined in `:root` for all colors/sizing.
 - The app uses vanilla JS module pattern: `const ModuleName = (() => { ... return { publicMethods }; })();`
 - All API calls go through the `API` module in `api.js` which adds Bearer token auth headers.
-- New database migrations go in `migrations/` as numbered SQL files (e.g., `0003_*.sql`). The `setup.sh` script auto-runs all `migrations/*.sql` files in order.
+- New database migrations go in `migrations/` as numbered SQL files (e.g., `0004_*.sql`). The `setup.sh` script auto-runs all `migrations/*.sql` files in order.
 - Toast notifications: `showToast(message, type, tip)` where type is 'success', 'error', or 'info'.
+
+### Frontend Module Architecture (all in `app.js`)
+
+| Module | Purpose | Key Exports |
+|--------|---------|-------------|
+| `App` | Core navigation, home page, announcements | `onLogin`, `navigate`, `updateNav`, `dismissAnnouncement` |
+| `Market` | Open market stock list, watchlist, chart drawing | `load`, `filterStocks`, `openDetail`, `closeModal`, `executeTrade`, `togglePin`, `setChartType`, `setHistoryRange`, `drawChart`, `drawLineChart`, `drawCandlestickChart`, `startPolling`, `stopPolling` |
+| `Portfolio` | Portfolio page with holdings + P/L | `load` |
+| `Leaderboard` | Ranked player lists (weekly/alltime/level) | `show` |
+| `Profile` | Player profile pages | `loadOwn`, `loadById` |
+| `Lobby` | Full lobby system (browser, create, waiting, match, results) | `load`, `showCreate`, `hideCreate`, `doCreate`, `toggleRewardFields`, `joinOrView`, `leaveRoom`, `startMatch`, `selectStock`, `closeTrade`, `updateMatchTradeTotal`, `matchTrade`, `backToBrowser`, `toggleMatchChartType`, `openStockModal`, `closeStockModal`, `setChartType`, `updateModalTradeTotal`, `modalTrade` |
+| `Chat` | Global chat panel | `init`, `toggle`, `send`, `stopPolling` |
+
+**Global state variables:** `currentUser`, `allStocks`, `currentPage`, `pollInterval`, `watchlistIds`
+
+**Global helper functions:** `showToast()`, `formatMoney()`, `formatPercent()`, `changeClass()`, `formatPnlColor()`
+
+**Navigation:** `App.navigate(page)` hides all `.page` divs and shows `#page-{page}`. The page name triggers a data load via switch-case (e.g., `'lobbies'` calls `Lobby.load()`).
+
+### Database Schema Quick Reference
+
+**Users table key fields:** `id`, `username`, `password_hash`, `password_salt`, `money` (default 10000), `xp` (default 0), `level` (default 1), `highest_money`, `is_admin` (default 0), `is_banned` (default 0), `chat_banned` (default 0), `equipped_title`, `equipped_background`, `equipped_card_style`, `last_active`, `created_at`
+
+**Lobbies table:** `id`, `creator_id`, `name`, `status` ('waiting'/'active'/'finished'), `max_players`, `time_limit_minutes`, `tick_speed_seconds`, `is_locked`, `reward_type` ('pool'/'percentage'), `pool_entry_fee`, `reward_percentage`, `started_at`, `finished_at`, `created_at`
+
+**Lobby players:** `lobby_id`, `user_id`, `money` (match money, default 10000), `final_money`, `placement`, `reward_earned`, `xp_earned`, `joined_at`
+
+**Cosmetics table (exists, not yet populated):** `id`, `name`, `type` ('title'/'background'/'card_style'/'effect'), `rarity` ('common'/'uncommon'/'rare'/'epic'/'legendary'), `description`, `css_value`, `source` ('battlepass'/'crate'), `battlepass_level`
+
+**User cosmetics (exists, not yet populated):** `user_id`, `cosmetic_id`, `equipped` (0/1), `obtained_at`
+
+**Game config (key-value):** `chat_enabled` (default '1'), `admin_password` (default 'BullRun2026!')
 
 ### Hosting Constraints
 - Must stay on Cloudflare free tier ($5/month max if absolutely needed).
@@ -298,10 +373,10 @@ This ensures the tables are always in the same database file the dev server uses
 
 ### GitHub Workflow
 - Repo: `https://github.com/SillyBilly627/BullRun`
-- Xavier will need to provide a GitHub Personal Access Token (fine-grained, with Contents read+write permission on the BullRun repo) for pushing.
+- Xavier will provide a GitHub Personal Access Token (fine-grained, with Contents read+write permission on the BullRun repo) for pushing.
 - Push with: `git remote set-url origin https://SillyBilly627:TOKEN@github.com/SillyBilly627/BullRun.git`
 - Always commit with descriptive messages explaining what changed and why.
-- Always update DEVELOPMENT.md after completing features.
+- **Always update DEVELOPMENT.md after completing features** (see documentation mandate above).
 - The `setup.sh` file gets modified locally by `chmod +x` — Xavier must run `git checkout -- setup.sh` before `git pull`.
 
 ### Lobby Tick System (Phase 3 — IMPLEMENTED)
@@ -312,3 +387,12 @@ This ensures the tables are always in the same database file the dev server uses
 - Random company name generation: 40 prefixes × 20 suffixes, with collision detection for both names and symbols within a lobby.
 - Lobby price engine differences from Open mode: higher volatility range (0.03-0.08), stronger player pressure effect (×0.002 vs ×0.001), weaker mean reversion (0.3% vs 0.5%), faster pressure decay (×0.6 vs ×0.7), 15% momentum chance at 3x multiplier (vs 10% at 2.5x in Open mode).
 - Match auto-ends: lobby tick endpoint checks if `timeRemaining <= 0` and calls `endLobbyMatch()` to calculate placements, distribute rewards, award XP, and clean up the KV tick key.
+- **Frontend chart sync:** stockHistories stores OHLCV objects `{open, high, low, close}`. New data is appended when `current_price !== lastRecordedClose` (not based on `ticked` flag). This ensures multi-tab support works correctly.
+- **Polling architecture:** `refreshMatch()` uses `Promise.all` for parallel tick+portfolio fetch. A `matchPolling` guard (try/finally) prevents overlapping requests. Client-side `setInterval` counts down every 1 second independently; server syncs authoritative time every 2 seconds.
+
+### Reward System Details
+**Pool mode:** All players pay an entry fee (configurable, $0-$5000). Total pool = entry_fee × player_count. Distributed: 1st=50%, 2nd=30%, 3rd=20%.
+
+**Percentage mode:** Fixed tiers (no custom input). 1st place earns +25% of their Open mode cash balance. 2nd earns +15%. 3rd earns +7.5%. These are hardcoded in `endLobbyMatch()` in `[[path]].js`.
+
+**XP from lobbies:** 25 XP for participation + 100 XP for 1st / 60 XP for 2nd / 30 XP for 3rd + 5 XP per $100 profit. All XP/level updates happen in `endLobbyMatch()`.
