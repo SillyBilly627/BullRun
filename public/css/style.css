@@ -1628,3 +1628,48 @@ input, button, select { font-family: inherit; }
 .card-plasma { border: 1px solid rgba(168,85,247,0.5) !important; box-shadow: 0 0 12px rgba(168,85,247,0.2); animation: plasmaPulse 2s ease-in-out infinite; }
 @keyframes plasmaPulse { 0%,100% { box-shadow: 0 0 8px rgba(168,85,247,0.15); } 50% { box-shadow: 0 0 18px rgba(168,85,247,0.3); } }
 .card-dragon { border: 1px solid rgba(239,68,68,0.5) !important; box-shadow: 0 0 12px rgba(239,68,68,0.15); }
+
+/* Extended battle pass backgrounds (levels 21-250) */
+.profile-bg-emerald { background: linear-gradient(135deg, rgba(16,185,129,0.18), rgba(34,197,94,0.08)) !important; }
+.profile-bg-sunset { background: linear-gradient(135deg, rgba(251,146,60,0.15), rgba(168,85,247,0.1)) !important; }
+.profile-bg-storm { background: linear-gradient(180deg, rgba(100,116,139,0.15), rgba(59,130,246,0.12), rgba(168,85,247,0.08)) !important; }
+.profile-bg-cyberpunk { background: linear-gradient(135deg, rgba(236,72,153,0.12), rgba(6,182,212,0.12)) !important; border-color: rgba(236,72,153,0.2) !important; }
+.profile-bg-frost { background: linear-gradient(180deg, rgba(147,197,253,0.15), rgba(224,242,254,0.05), transparent) !important; }
+.profile-bg-bloodmoon { background: radial-gradient(ellipse at 50% 30%, rgba(239,68,68,0.18), rgba(127,29,29,0.1), transparent) !important; }
+.profile-bg-holographic { background: linear-gradient(135deg, rgba(239,68,68,0.08), rgba(245,158,11,0.08), rgba(34,197,94,0.08), rgba(59,130,246,0.08), rgba(168,85,247,0.08), rgba(236,72,153,0.08)) !important; animation: holoShift 4s ease infinite; }
+@keyframes holoShift { 0%,100% { filter: hue-rotate(0deg); } 50% { filter: hue-rotate(30deg); } }
+.profile-bg-darkmatter { background: radial-gradient(ellipse at center, rgba(15,23,42,0.9), rgba(30,41,59,0.5), transparent) !important; }
+.profile-bg-supernova { background: radial-gradient(ellipse at 50% 50%, rgba(245,158,11,0.2), rgba(239,68,68,0.12), rgba(168,85,247,0.08), transparent) !important; }
+.profile-bg-blackgold { background: linear-gradient(135deg, rgba(15,23,42,0.9), rgba(245,158,11,0.1)) !important; border-color: rgba(245,158,11,0.4) !important; }
+.profile-bg-quantum { background: repeating-conic-gradient(rgba(59,130,246,0.05) 0% 25%, transparent 25% 50%) !important; }
+.profile-bg-diamondvault { background: linear-gradient(135deg, rgba(147,197,253,0.12), rgba(245,158,11,0.08), rgba(147,197,253,0.12)) !important; border-color: rgba(147,197,253,0.3) !important; }
+.profile-bg-prestigegold { background: linear-gradient(135deg, rgba(245,158,11,0.25), rgba(234,179,8,0.15), rgba(245,158,11,0.25)) !important; border-color: rgba(245,158,11,0.5) !important; box-shadow: 0 0 20px rgba(245,158,11,0.1); }
+
+/* Extended crate backgrounds */
+.profile-bg-toxic { background: linear-gradient(180deg, rgba(34,197,94,0.2), rgba(163,230,53,0.1), transparent) !important; }
+.profile-bg-magma { background: radial-gradient(ellipse at bottom, rgba(239,68,68,0.2), rgba(245,158,11,0.12), transparent) !important; }
+.profile-bg-nebula { background: radial-gradient(ellipse at 30% 40%, rgba(168,85,247,0.15), rgba(236,72,153,0.08), transparent 70%), radial-gradient(ellipse at 70% 60%, rgba(59,130,246,0.1), transparent 60%) !important; }
+
+/* Extended battle pass card styles (levels 21-250) */
+.card-emerald { border: 1px solid rgba(16,185,129,0.5) !important; box-shadow: 0 0 8px rgba(16,185,129,0.12); }
+.card-copper { border: 1px solid rgba(180,120,60,0.6) !important; box-shadow: 0 0 8px rgba(180,120,60,0.15); }
+.card-ruby { border: 1px solid rgba(220,38,38,0.5) !important; box-shadow: 0 0 10px rgba(220,38,38,0.12); }
+.card-sapphire { border: 1px solid rgba(37,99,235,0.5) !important; box-shadow: 0 0 12px rgba(37,99,235,0.18); animation: sapphirePulse 3s ease-in-out infinite; }
+@keyframes sapphirePulse { 0%,100% { box-shadow: 0 0 8px rgba(37,99,235,0.1); } 50% { box-shadow: 0 0 16px rgba(37,99,235,0.25); } }
+.card-titanium { border: 1px solid rgba(148,163,184,0.6) !important; box-shadow: 0 0 6px rgba(148,163,184,0.15); }
+.card-obsidian { border: 1px solid rgba(30,41,59,0.8) !important; box-shadow: 0 0 12px rgba(0,0,0,0.3), inset 0 0 8px rgba(100,116,139,0.1); }
+.card-platinum { border: 1px solid rgba(226,232,240,0.6) !important; box-shadow: 0 0 12px rgba(226,232,240,0.2); }
+.card-auroraframe { border: 1px solid rgba(34,197,94,0.4) !important; box-shadow: 0 0 12px rgba(34,197,94,0.1), 0 0 24px rgba(59,130,246,0.08); animation: auroraCard 4s ease-in-out infinite; }
+@keyframes auroraCard { 0%,100% { border-color: rgba(34,197,94,0.4); } 33% { border-color: rgba(59,130,246,0.4); } 66% { border-color: rgba(168,85,247,0.4); } }
+.card-void { border: 1px solid rgba(168,85,247,0.5) !important; box-shadow: 0 0 15px rgba(168,85,247,0.15), 0 0 30px rgba(0,0,0,0.2); animation: voidCrack 3s ease-in-out infinite; }
+@keyframes voidCrack { 0%,100% { box-shadow: 0 0 12px rgba(168,85,247,0.1); } 50% { box-shadow: 0 0 20px rgba(168,85,247,0.3), 0 0 40px rgba(0,0,0,0.3); } }
+.card-celestial { border: 1px solid rgba(245,158,11,0.6) !important; box-shadow: 0 0 16px rgba(245,158,11,0.2), 0 0 32px rgba(245,158,11,0.08); animation: celestialGlow 3s ease-in-out infinite; }
+@keyframes celestialGlow { 0%,100% { box-shadow: 0 0 12px rgba(245,158,11,0.15); } 50% { box-shadow: 0 0 24px rgba(245,158,11,0.3), 0 0 48px rgba(245,158,11,0.1); } }
+.card-prestigediamond { border: 2px solid rgba(147,197,253,0.7) !important; box-shadow: 0 0 16px rgba(147,197,253,0.25), 0 0 32px rgba(245,158,11,0.1); animation: prestigeShine 2.5s ease-in-out infinite; }
+@keyframes prestigeShine { 0%,100% { border-color: rgba(147,197,253,0.7); box-shadow: 0 0 12px rgba(147,197,253,0.2); } 50% { border-color: rgba(245,158,11,0.7); box-shadow: 0 0 20px rgba(245,158,11,0.3); } }
+
+/* Extended crate card styles */
+.card-rust { border: 1px solid rgba(180,83,9,0.4) !important; }
+.card-emeraldcrate { border: 1px solid rgba(16,185,129,0.5) !important; box-shadow: 0 0 10px rgba(16,185,129,0.15); }
+.card-phantom { border: 1px solid rgba(148,163,184,0.3) !important; box-shadow: 0 0 20px rgba(148,163,184,0.08); animation: phantomFade 3s ease-in-out infinite; }
+@keyframes phantomFade { 0%,100% { border-color: rgba(148,163,184,0.3); opacity: 1; } 50% { border-color: rgba(148,163,184,0.6); opacity: 0.92; } }

@@ -41,10 +41,11 @@ bullrun/
 ├── README.md                 # User-facing setup instructions
 ├── DEVELOPMENT.md            # THIS FILE — project status for AI context
 ├── migrations/
-│   ├── 0001_initial.sql      # Full DB schema + seed data (35 stocks)
+│   ├── 0001_initial.sql      # Full DB schema + seed data (35 base stocks)
 │   ├── 0002_watchlist.sql    # Watchlist table + tick tracking config
 │   ├── 0003_lobby_stock_history.sql  # Lobby stock price history table
 │   └── 0004_seed_cosmetics.sql      # Seed cosmetic items (battle pass + crate)
+│   └── 0005_extended_content.sql    # Extended BP to Lv250 + 35 more stocks
 ├── functions/
 │   └── api/
 │       └── [[path]].js       # ALL backend API routes (~2200 lines, single file)
@@ -177,7 +178,7 @@ Phase 1 has been tested and confirmed working locally:
 
 ### Database Tables Created
 
-Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lobby_players, lobby_stocks, lobby_portfolios, lobby_transactions, lobby_stock_history, cosmetics, user_cosmetics, chat_messages, announcements, bans, game_config (with default settings), watchlist.
+Users, stocks (70 total: 32 real + 38 fictional), portfolios, transactions, stock_history, lobbies, lobby_players, lobby_stocks, lobby_portfolios, lobby_transactions, lobby_stock_history, cosmetics (~85 items), user_cosmetics, chat_messages, announcements, bans, game_config (with default settings), watchlist.
 
 ### Key Design Decisions
 
@@ -241,7 +242,7 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 ### Phase 4 — Polish & Extras ✅ CORE COMPLETE
 
 **Cosmetics system:**
-- [x] **Seed cosmetics into DB** — `migrations/0004_seed_cosmetics.sql` populates 20 battle pass items (levels 2-20) and 17 crate items across all rarities. Types: titles, backgrounds, card_styles.
+- [x] **Seed cosmetics into DB** — `0004_seed_cosmetics.sql` (20 base items) + `0005_extended_content.sql` (48 more battle pass items to Lv250, 10 more crate items, 35 more stocks). Total: ~58 battle pass rewards across levels 2-250, ~27 crate spin items.
 - [x] **Equip cosmetics** — `cosmetics/equip` API route handles equip/unequip. Updates `equipped_title`, `equipped_background`, `equipped_card_style` on users table.
 - [x] **Cosmetics page** — "Locker" nav tab with grid display, filter by type, equipped bar showing current loadout with remove buttons.
 - [x] **Visual application** — titles display on profiles/leaderboard/chat with name lookup. Profile backgrounds applied via CSS classes. Leaderboard rows get card_style CSS classes (border glow, animations).
@@ -289,7 +290,7 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 ### Key files to modify per phase:
 - **New API routes:** Add to `functions/api/[[path]].js`
 - **New pages/UI:** Add HTML to `public/index.html`, styles to `public/css/style.css`, logic to `public/js/app.js`
-- **New database tables:** Create a new migration file `migrations/0005_*.sql` (next number in sequence)
+- **New database tables:** Create a new migration file `migrations/0006_*.sql` (next number in sequence)
 - **Configuration:** `wrangler.toml` for Cloudflare bindings
 
 ### Local development:
