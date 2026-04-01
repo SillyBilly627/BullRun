@@ -1742,6 +1742,14 @@ const Lobby = (() => {
             ${myResult.reward_earned > 0 ? `<span class="results-reward" style="margin-left:1rem;">+${formatMoney(myResult.reward_earned)}</span>` : ''}
             ${myResult.xp_earned > 0 ? `<span class="results-xp" style="margin-left:0.75rem;">+${myResult.xp_earned} XP</span>` : ''}
           </div>
+          ${myPlacement <= 3 ? `
+            <div style="margin-top:1rem;">
+              <button class="btn btn-primary" onclick="Cosmetics.openCrate(${myPlacement})" style="background:linear-gradient(135deg,var(--accent),#3b82f6);font-size:1rem;padding:0.7rem 1.5rem;">
+                🎁 Open Crate Spin!
+              </button>
+              <div class="text-muted" style="font-size:0.78rem;margin-top:0.3rem;">Top 3 placement reward — spin for a cosmetic item!</div>
+            </div>
+          ` : ''}
         ` : ''}
       </div>
 

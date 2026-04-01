@@ -43,10 +43,11 @@ bullrun/
 ├── migrations/
 │   ├── 0001_initial.sql      # Full DB schema + seed data (35 stocks)
 │   ├── 0002_watchlist.sql    # Watchlist table + tick tracking config
-│   └── 0003_lobby_stock_history.sql  # Lobby stock price history table
+│   ├── 0003_lobby_stock_history.sql  # Lobby stock price history table
+│   └── 0004_seed_cosmetics.sql      # Seed cosmetic items (battle pass + crate)
 ├── functions/
 │   └── api/
-│       └── [[path]].js       # ALL backend API routes (~1750 lines, single file)
+│       └── [[path]].js       # ALL backend API routes (~2200 lines, single file)
 └── public/
     ├── index.html            # Main HTML shell — SPA pages, modals, chat panel (~560 lines)
     ├── css/
@@ -119,6 +120,31 @@ Phase 1 has been tested and confirmed working locally:
 | `chat/messages` | GET | Yes | Get recent chat messages (supports `?since=` for incremental polling) |
 | `chat/send` | POST | Yes | Send a chat message (200 char max, sanitized, checks chat_banned) |
 
+**Added in Phase 4:**
+
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `admin/verify` | POST | Yes | Verify admin password, grants is_admin flag to user |
+| `admin/users` | GET | Admin | List all users with stats and status |
+| `admin/ban` | POST | Admin | Ban or unban a user (game-wide) |
+| `admin/chat-ban` | POST | Admin | Ban or unban a user from chat only |
+| `admin/set-money` | POST | Admin | Set a user's money to a specific amount |
+| `admin/set-xp` | POST | Admin | Set a user's XP (auto-calculates level) |
+| `admin/set-stock-price` | POST | Admin | Manually set a stock's current price |
+| `admin/announcement` | POST | Admin | Push new announcement or clear all |
+| `admin/toggle-chat` | POST | Admin | Enable or disable global chat |
+| `admin/clear-chat` | POST | Admin | Delete all chat messages |
+| `admin/force-close-lobby` | POST | Admin | Force-end a lobby (scores if active) |
+| `admin/lobbies` | GET | Admin | List active/waiting lobbies |
+| `admin/weekly-reset` | POST | Admin | Reset all money, portfolios, stock prices |
+| `admin/toggle-admin` | POST | Admin | Grant or revoke admin from a user |
+| `admin/give-cosmetic` | POST | Admin | Give a cosmetic item to any user |
+| `admin/config` | GET | Admin | Get all game_config values |
+| `cosmetics` | GET | Yes | List all cosmetics with ownership + equipped status |
+| `cosmetics/equip` | POST | Yes | Equip or unequip an owned cosmetic |
+| `cosmetics/check-unlocks` | POST | Yes | Auto-unlock battle pass items at current level |
+| `cosmetics/crate-spin` | POST | Yes | Spin for a random crate item (placement-weighted) |
+
 ### Frontend Pages
 
 - **Auth screen** — login/signup with validation and Enter key support
@@ -140,6 +166,14 @@ Phase 1 has been tested and confirmed working locally:
 - **Announcement banner** — dismissable top banner for admin messages
 - **Loading screen** — animated logo + progress bar on page load
 - **Mobile responsive** — bottom nav bar on small screens, stacked layouts
+
+**Added in Phase 4:**
+- **Cosmetics page ("Locker")** — nav tab to view owned cosmetics, equip/unequip, filter by type (titles/backgrounds/card styles). Sub-tabs for "My Locker" and "Battle Pass" progression track.
+- **Battle pass track** — horizontal scrolling progression showing all level-gated cosmetics, locked/unlocked state, rarity colors
+- **Crate spin modal** — animated reel spin with rarity-weighted item selection, triggered after top-3 lobby placement
+- **Admin panel page** — hidden page accessed by clicking the BullRun logo 5 times. Features: user management table (ban/unban, set money/XP, toggle admin), stock price manipulation, lobby force-close, announcement push/clear, chat toggle/clear, weekly reset button
+- **Admin password modal** — password prompt for first-time admin access (default: BullRun2026!)
+- **Cosmetic visuals** — equipped titles shown on profiles/leaderboard/chat, profile backgrounds applied as CSS gradients, leaderboard card styles with glow/border effects
 
 ### Database Tables Created
 
@@ -191,7 +225,7 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 
 **Leveling:**
 - [x] **XP progress bar** — shown in nav bar with gradient fill, shows current XP / XP needed for next level
-- [ ] **Leveling milestones** — unlock cosmetic items at certain levels (deferred to Phase 4 with battle pass)
+- [x] **Leveling milestones** — cosmetic items unlock at certain levels via Phase 4 battle pass system
 
 **Architecture notes for Phase 3:**
 - Lobby ticks use the same lazy evaluation pattern as Open mode: frontend polls, backend ticks if enough time has passed. KV key `lobby_tick_{id}` tracks last tick per lobby.
@@ -204,39 +238,50 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 - **Performance optimizations:** tick + portfolio calls run in parallel via `Promise.all`. A `matchPolling` guard (try/finally) prevents overlapping requests. Client-side 1-second timer runs independently for smooth countdown; server syncs the authoritative time every 2 seconds.
 - **Inline chart data:** stockHistories stores OHLCV objects `{open, high, low, close}` so both line and candlestick views work on the inline cards.
 
-### Phase 4 — Polish & Extras (Priority: NEXT)
+### Phase 4 — Polish & Extras ✅ CORE COMPLETE
 
 **Cosmetics system:**
-- [ ] **Seed cosmetics into DB** — populate the `cosmetics` table with items. The table already exists with columns: `name`, `type` ('title'/'background'/'card_style'/'effect'), `rarity` ('common'/'uncommon'/'rare'/'epic'/'legendary'), `description`, `css_value` (the actual CSS class/value to apply), `source` ('battlepass'/'crate'), `battlepass_level` (null for crate items). CSS rarity colors already defined in `:root`: `--common` (#94a3b8), `--uncommon` (#22c55e), `--rare` (#3b82f6), `--epic` (#a855f7), `--legendary` (#f59e0b).
-- [ ] **Equip cosmetics** — API routes to equip/unequip. Users table already has `equipped_title`, `equipped_background`, `equipped_card_style` fields. The `user_cosmetics` table tracks ownership (`user_id`, `cosmetic_id`, `equipped`, `obtained_at`).
-- [ ] **Cosmetics page** — dedicated page for previewing and equipping owned cosmetics. Add a nav tab or button on profile page.
-- [ ] **Visual application** — apply equipped cosmetics: titles show on profile/leaderboard/chat, backgrounds change profile card gradient, card_styles change leaderboard row appearance.
+- [x] **Seed cosmetics into DB** — `migrations/0004_seed_cosmetics.sql` populates 20 battle pass items (levels 2-20) and 17 crate items across all rarities. Types: titles, backgrounds, card_styles.
+- [x] **Equip cosmetics** — `cosmetics/equip` API route handles equip/unequip. Updates `equipped_title`, `equipped_background`, `equipped_card_style` on users table.
+- [x] **Cosmetics page** — "Locker" nav tab with grid display, filter by type, equipped bar showing current loadout with remove buttons.
+- [x] **Visual application** — titles display on profiles/leaderboard/chat with name lookup. Profile backgrounds applied via CSS classes. Leaderboard rows get card_style CSS classes (border glow, animations).
 
 **Battle pass (tied to leveling):**
-- [ ] **Battle pass track** — as players level up, they automatically unlock cosmetic items where `source='battlepass'` and `battlepass_level <= player_level`. Show a progression UI with locked/unlocked items.
-- [ ] **Leveling milestones** — visual notification when a new item is unlocked. Could be a modal or special toast.
+- [x] **Battle pass track** — horizontal scrolling progression UI. Items auto-unlock when player level >= `battlepass_level`. `cosmetics/check-unlocks` route called on Locker page load, grants any unlocked items and shows toast notifications.
+- [x] **Leveling milestones** — toast notification fires for each newly unlocked item when visiting the Locker page.
 
 **Crate spin (tied to lobby wins):**
-- [ ] **Crate spin UI** — after winning a Closed mode match (top 3 placement), players get a crate spin animation. Items come from cosmetics where `source='crate'`. Higher placement = better rarity chances.
-- [ ] **Rarity weights** — common: 50%, uncommon: 25%, rare: 15%, epic: 8%, legendary: 2% (adjust for placement bonus).
+- [x] **Crate spin UI** — animated reel with 20 items, CSS cubic-bezier easing, lands on winning item at position 15. Result reveal card with animation. Modal triggered by `Cosmetics.openCrate(placement)`.
+- [x] **Rarity weights** — placement-based weighting. 1st place: legendary 10%, epic 20%, rare 25%, uncommon 25%, common 20%. Worse placements shift heavily toward common. Pool built by repeating items by weight count, random selection via `crypto.getRandomValues`.
 
 **Admin panel:**
-- [ ] **Hidden access** — secret button (e.g., click logo 5 times, or a hidden nav item) + admin password prompt. Password stored in `game_config` table as `admin_password` (default 'BullRun2026!'). The `is_admin` field on users can also be used.
-- [ ] **Admin features:** view all connected players and IPs, ban accounts/IPs (uses `bans` table with `user_id`, `ip_address`, `reason`, `banned_by`, `created_at`), push announcements (insert into `announcements` table), manipulate stock prices/player levels/money/cosmetics, view and force-close active lobbies, enable/disable global chat (update `game_config` key `chat_enabled`), clear chat history (DELETE FROM chat_messages), ban players from chat individually (set `chat_banned=1` on users table).
-- [ ] **Admin API routes** — all admin routes should verify `is_admin=1` on the user OR check a provided admin password against `game_config.admin_password`.
+- [x] **Hidden access** — click the BullRun logo in the nav bar 5 times within 2 seconds. If already admin (`is_admin=1`), goes straight to admin page. Otherwise shows password modal. Password checked against `game_config.admin_password` (default 'BullRun2026!'). Successful verification sets `is_admin=1` on the user.
+- [x] **Admin features:** user management table (search, ban/unban game, ban/unban chat, edit money/XP/admin status via `key:value` prompt), push/clear announcements, toggle/clear global chat, stock price manipulation grid, active lobby list with force-close, weekly reset button (double confirmation).
+- [x] **Admin API routes** — all 16 admin routes verify `is_admin=1` on the authenticated user. The `admin/verify` route grants admin flag after password check.
 
 **Other Phase 4 items:**
-- [ ] **Weekly reset** — scheduled job to reset all player money to $10,000 and stock prices to base. Needs either a Cloudflare Cron Trigger or a manual admin button in the admin panel.
+- [x] **Weekly reset** — admin panel button triggers reset: all user money to $10,000, clear portfolios, reset stock prices to base, clear stock history and transactions. Double confirmation prompt.
+- [x] **Crate spin trigger from lobby results** — "Open Crate Spin!" button appears on post-match results for players who placed top 3, calls `Cosmetics.openCrate(placement)`.
 - [ ] **Educational features** — tooltips throughout the app explaining stock concepts, glossary page with trading terminology, contextual hints, post-trade summaries explaining real-world equivalents.
 - [ ] **Security review** — rate limiting, input validation audit, XSS prevention audit.
 - [ ] **Native Swift wrapper apps** — macOS + iOS/iPadOS using WKWebView in SwiftUI (stretch goal, only if time allows).
+
+**Architecture notes for Phase 4:**
+- Admin access uses a two-step approach: first verify password via `admin/verify` (which sets `is_admin=1`), then all subsequent admin routes check `user.is_admin`. Once admin, no need to re-enter password.
+- Secret admin entry: clicking the nav logo 5 times within 2 seconds triggers `App.handleLogoClick()` which either navigates to admin page (if already admin) or shows the password modal.
+- Cosmetics use `css_value` field as the key: stored on user as `equipped_title`, `equipped_background`, `equipped_card_style`. Frontend maps `css_value` → display name via `Cosmetics.COSMETIC_TITLE_MAP` (built on load from all cosmetics data).
+- Profile backgrounds are CSS classes prefixed with `profile-`: e.g. `bg-aurora` → `.profile-bg-aurora` in CSS. Applied as a class on `.profile-header`.
+- Card styles are CSS classes applied directly: e.g. `card-neon` → `.card-neon` on leaderboard `.lb-row` elements. Some include animations (`neonPulse`, `plasmaPulse`).
+- Battle pass auto-unlock: `cosmetics/check-unlocks` finds all `source='battlepass'` items where `battlepass_level <= user.level` and not in `user_cosmetics`, then inserts them. Called on Locker page load.
+- Crate spin reel: backend generates 20-item array, places the won item at position 15. Frontend animates with CSS `transform: translateX()` and cubic-bezier easing over 4 seconds, then shows result card after 4.2s delay.
+- Weekly reset is destructive: clears portfolios, transactions, stock_history tables. Resets all user money and stock prices. Double confirmation required in admin UI.
 
 ---
 
 ## How to Continue Development
 
 1. Read this file to understand what exists
-2. Pick up from the next uncompleted phase (Phase 4)
+2. Pick up from any remaining uncompleted items (crate spin trigger, educational features, security review)
 3. After making changes, commit with a descriptive message and update the checklist above
 4. Keep the same patterns: all API routes in the single `[[path]].js` file, vanilla JS frontend modules, dark theme CSS variables
 5. **The original master prompt/project brief is NOT available in new sessions** — all requirements are documented in this file. If something is ambiguous, ask Xavier.
@@ -244,7 +289,7 @@ Users, stocks (35 seeded), portfolios, transactions, stock_history, lobbies, lob
 ### Key files to modify per phase:
 - **New API routes:** Add to `functions/api/[[path]].js`
 - **New pages/UI:** Add HTML to `public/index.html`, styles to `public/css/style.css`, logic to `public/js/app.js`
-- **New database tables:** Create a new migration file `migrations/0004_*.sql` (next number in sequence)
+- **New database tables:** Create a new migration file `migrations/0005_*.sql` (next number in sequence)
 - **Configuration:** `wrangler.toml` for Cloudflare bindings
 
 ### Local development:
