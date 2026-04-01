@@ -1735,6 +1735,479 @@ export async function onRequest(context) {
     }
 
     // ======================================
+    // ADMIN ROUTES
+    // ======================================
+    // Admin routes require either:
+    // - The admin password from game_config (for initial auth)
+    // - An authenticated user with is_admin = 1
+    // ======================================
+
+    // --- ADMIN: VERIFY PASSWORD (grants admin flag to user) ---
+    if (path === 'admin/verify' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      const body = await request.json();
+      const password = body.password || '';
+
+      // Check against stored admin password
+      const config = await env.DB.prepare("SELECT value FROM game_config WHERE key = 'admin_password'").first();
+      if (!config || password !== config.value) {
+        return jsonResponse({ error: 'Invalid admin password' }, 403);
+      }
+
+      // Grant admin flag to this user
+      await env.DB.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').bind(user.id).run();
+
+      return jsonResponse({ success: true, message: 'Admin access granted' });
+    }
+
+    // --- ADMIN: GET ALL USERS ---
+    if (path === 'admin/users' && method === 'GET') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const users = await env.DB.prepare(`
+        SELECT id, username, money, xp, level, highest_money, is_admin, is_banned, chat_banned,
+               equipped_title, equipped_background, equipped_card_style, created_at, last_active
+        FROM users ORDER BY id ASC
+      `).all();
+
+      return jsonResponse({ users: users.results });
+    }
+
+    // --- ADMIN: BAN/UNBAN USER ---
+    if (path === 'admin/ban' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const targetId = parseInt(body.userId);
+      const ban = body.ban !== false; // default true
+      const reason = sanitize(body.reason || '');
+
+      if (!targetId) return jsonResponse({ error: 'Missing userId' }, 400);
+      if (targetId === user.id) return jsonResponse({ error: 'Cannot ban yourself' }, 400);
+
+      await env.DB.prepare('UPDATE users SET is_banned = ? WHERE id = ?').bind(ban ? 1 : 0, targetId).run();
+
+      if (ban) {
+        await env.DB.prepare(
+          'INSERT INTO bans (user_id, reason, banned_by) VALUES (?, ?, ?)'
+        ).bind(targetId, reason, user.id).run();
+      }
+
+      return jsonResponse({ success: true, message: ban ? 'User banned' : 'User unbanned' });
+    }
+
+    // --- ADMIN: CHAT BAN/UNBAN ---
+    if (path === 'admin/chat-ban' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const targetId = parseInt(body.userId);
+      const ban = body.ban !== false;
+
+      if (!targetId) return jsonResponse({ error: 'Missing userId' }, 400);
+
+      await env.DB.prepare('UPDATE users SET chat_banned = ? WHERE id = ?').bind(ban ? 1 : 0, targetId).run();
+
+      return jsonResponse({ success: true, message: ban ? 'User chat banned' : 'User chat unbanned' });
+    }
+
+    // --- ADMIN: SET USER MONEY ---
+    if (path === 'admin/set-money' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const targetId = parseInt(body.userId);
+      const amount = parseFloat(body.amount);
+
+      if (!targetId || isNaN(amount) || amount < 0) return jsonResponse({ error: 'Invalid userId or amount' }, 400);
+
+      await env.DB.prepare('UPDATE users SET money = ? WHERE id = ?').bind(amount, targetId).run();
+      // Update highest_money if new amount is higher
+      const target = await env.DB.prepare('SELECT highest_money FROM users WHERE id = ?').bind(targetId).first();
+      if (target && amount > target.highest_money) {
+        await env.DB.prepare('UPDATE users SET highest_money = ? WHERE id = ?').bind(amount, targetId).run();
+      }
+
+      return jsonResponse({ success: true, message: `Money set to $${amount.toFixed(2)}` });
+    }
+
+    // --- ADMIN: SET USER XP ---
+    if (path === 'admin/set-xp' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const targetId = parseInt(body.userId);
+      const xp = parseInt(body.xp);
+
+      if (!targetId || isNaN(xp) || xp < 0) return jsonResponse({ error: 'Invalid userId or XP' }, 400);
+
+      const newLevel = calculateLevel(xp);
+      await env.DB.prepare('UPDATE users SET xp = ?, level = ? WHERE id = ?').bind(xp, newLevel, targetId).run();
+
+      return jsonResponse({ success: true, message: `XP set to ${xp} (Level ${newLevel})` });
+    }
+
+    // --- ADMIN: SET STOCK PRICE ---
+    if (path === 'admin/set-stock-price' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const stockId = parseInt(body.stockId);
+      const price = parseFloat(body.price);
+
+      if (!stockId || isNaN(price) || price < 0.01) return jsonResponse({ error: 'Invalid stockId or price' }, 400);
+
+      await env.DB.prepare(
+        'UPDATE stocks SET previous_price = current_price, current_price = ? WHERE id = ?'
+      ).bind(price, stockId).run();
+
+      return jsonResponse({ success: true, message: `Stock price set to $${price.toFixed(2)}` });
+    }
+
+    // --- ADMIN: PUSH ANNOUNCEMENT ---
+    if (path === 'admin/announcement' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const message = sanitize(body.message || '');
+      const action = body.action || 'create'; // 'create' or 'clear'
+
+      if (action === 'clear') {
+        await env.DB.prepare('UPDATE announcements SET is_active = 0').run();
+        return jsonResponse({ success: true, message: 'All announcements cleared' });
+      }
+
+      if (!message) return jsonResponse({ error: 'Message cannot be empty' }, 400);
+
+      // Deactivate old announcements, create new one
+      await env.DB.prepare('UPDATE announcements SET is_active = 0').run();
+      await env.DB.prepare('INSERT INTO announcements (message, is_active) VALUES (?, 1)').bind(message).run();
+
+      return jsonResponse({ success: true, message: 'Announcement pushed' });
+    }
+
+    // --- ADMIN: TOGGLE CHAT ---
+    if (path === 'admin/toggle-chat' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const enabled = body.enabled ? '1' : '0';
+
+      await env.DB.prepare("UPDATE game_config SET value = ? WHERE key = 'chat_enabled'").bind(enabled).run();
+
+      return jsonResponse({ success: true, message: enabled === '1' ? 'Chat enabled' : 'Chat disabled' });
+    }
+
+    // --- ADMIN: CLEAR CHAT ---
+    if (path === 'admin/clear-chat' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      await env.DB.prepare('DELETE FROM chat_messages').run();
+
+      return jsonResponse({ success: true, message: 'Chat history cleared' });
+    }
+
+    // --- ADMIN: FORCE CLOSE LOBBY ---
+    if (path === 'admin/force-close-lobby' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const lobbyId = parseInt(body.lobbyId);
+      if (!lobbyId) return jsonResponse({ error: 'Missing lobbyId' }, 400);
+
+      const lobby = await env.DB.prepare('SELECT * FROM lobbies WHERE id = ?').bind(lobbyId).first();
+      if (!lobby) return jsonResponse({ error: 'Lobby not found' }, 404);
+
+      if (lobby.status === 'active') {
+        // End the match and calculate results
+        await endLobbyMatch(env, lobbyId);
+      } else {
+        // Just mark it as finished
+        await env.DB.prepare("UPDATE lobbies SET status = 'finished', finished_at = datetime('now') WHERE id = ?").bind(lobbyId).run();
+      }
+
+      // Clean up KV tick key
+      await env.SESSION_STORE.delete(`lobby_tick_${lobbyId}`);
+
+      return jsonResponse({ success: true, message: 'Lobby force closed' });
+    }
+
+    // --- ADMIN: GET ACTIVE LOBBIES ---
+    if (path === 'admin/lobbies' && method === 'GET') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const lobbies = await env.DB.prepare(`
+        SELECT l.*, u.username as creator_name,
+               (SELECT COUNT(*) FROM lobby_players WHERE lobby_id = l.id) as player_count
+        FROM lobbies l JOIN users u ON l.creator_id = u.id
+        WHERE l.status IN ('waiting', 'active')
+        ORDER BY l.created_at DESC
+      `).all();
+
+      return jsonResponse({ lobbies: lobbies.results });
+    }
+
+    // --- ADMIN: WEEKLY RESET ---
+    if (path === 'admin/weekly-reset' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      // Get starting money from config
+      const config = await env.DB.prepare("SELECT value FROM game_config WHERE key = 'starting_money'").first();
+      const startingMoney = config ? parseFloat(config.value) : 10000;
+
+      // Reset all user money
+      await env.DB.prepare('UPDATE users SET money = ?, highest_money = ?').bind(startingMoney, startingMoney).run();
+
+      // Clear all portfolios
+      await env.DB.prepare('DELETE FROM portfolios').run();
+
+      // Reset stock prices to base
+      await env.DB.prepare('UPDATE stocks SET current_price = base_price, previous_price = base_price, buy_pressure = 0').run();
+
+      // Clear stock history
+      await env.DB.prepare('DELETE FROM stock_history').run();
+
+      // Clear transactions
+      await env.DB.prepare('DELETE FROM transactions').run();
+
+      return jsonResponse({ success: true, message: `Weekly reset complete. All players set to $${startingMoney.toFixed(2)}` });
+    }
+
+    // --- ADMIN: MAKE/REMOVE ADMIN ---
+    if (path === 'admin/toggle-admin' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const targetId = parseInt(body.userId);
+      const makeAdmin = body.admin !== false;
+
+      if (!targetId) return jsonResponse({ error: 'Missing userId' }, 400);
+
+      await env.DB.prepare('UPDATE users SET is_admin = ? WHERE id = ?').bind(makeAdmin ? 1 : 0, targetId).run();
+
+      return jsonResponse({ success: true, message: makeAdmin ? 'Admin granted' : 'Admin revoked' });
+    }
+
+    // --- ADMIN: GIVE COSMETIC TO USER ---
+    if (path === 'admin/give-cosmetic' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const body = await request.json();
+      const targetId = parseInt(body.userId);
+      const cosmeticId = parseInt(body.cosmeticId);
+
+      if (!targetId || !cosmeticId) return jsonResponse({ error: 'Missing userId or cosmeticId' }, 400);
+
+      // Check if user already has it
+      const existing = await env.DB.prepare(
+        'SELECT id FROM user_cosmetics WHERE user_id = ? AND cosmetic_id = ?'
+      ).bind(targetId, cosmeticId).first();
+
+      if (existing) return jsonResponse({ error: 'User already owns this cosmetic' }, 400);
+
+      await env.DB.prepare(
+        'INSERT INTO user_cosmetics (user_id, cosmetic_id) VALUES (?, ?)'
+      ).bind(targetId, cosmeticId).run();
+
+      return jsonResponse({ success: true, message: 'Cosmetic given to user' });
+    }
+
+    // --- ADMIN: GET GAME CONFIG ---
+    if (path === 'admin/config' && method === 'GET') {
+      const user = await getSessionUser(request, env);
+      if (!user || !user.is_admin) return jsonResponse({ error: 'Admin access required' }, 403);
+
+      const config = await env.DB.prepare('SELECT * FROM game_config').all();
+      return jsonResponse({ config: config.results });
+    }
+
+    // ======================================
+    // COSMETICS ROUTES
+    // ======================================
+
+    // --- GET ALL COSMETICS ---
+    if (path === 'cosmetics' && method === 'GET') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      const cosmetics = await env.DB.prepare(
+        'SELECT * FROM cosmetics ORDER BY battlepass_level ASC, rarity ASC'
+      ).all();
+
+      // Get user's owned cosmetics
+      const owned = await env.DB.prepare(
+        'SELECT cosmetic_id FROM user_cosmetics WHERE user_id = ?'
+      ).bind(user.id).all();
+      const ownedIds = new Set(owned.results.map(o => o.cosmetic_id));
+
+      // Mark each cosmetic as owned or not
+      const enriched = cosmetics.results.map(c => ({
+        ...c,
+        owned: ownedIds.has(c.id),
+        equipped: (
+          (c.type === 'title' && user.equipped_title === c.css_value) ||
+          (c.type === 'background' && user.equipped_background === c.css_value) ||
+          (c.type === 'card_style' && user.equipped_card_style === c.css_value)
+        )
+      }));
+
+      return jsonResponse({
+        cosmetics: enriched,
+        equipped: {
+          title: user.equipped_title,
+          background: user.equipped_background,
+          card_style: user.equipped_card_style,
+        }
+      });
+    }
+
+    // --- EQUIP/UNEQUIP COSMETIC ---
+    if (path === 'cosmetics/equip' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      const body = await request.json();
+      const cosmeticId = parseInt(body.cosmeticId);
+      const unequip = body.unequip === true;
+
+      if (!cosmeticId && !unequip) return jsonResponse({ error: 'Missing cosmeticId' }, 400);
+
+      if (unequip) {
+        // Unequip by type
+        const type = body.type;
+        if (type === 'title') await env.DB.prepare('UPDATE users SET equipped_title = NULL WHERE id = ?').bind(user.id).run();
+        else if (type === 'background') await env.DB.prepare('UPDATE users SET equipped_background = NULL WHERE id = ?').bind(user.id).run();
+        else if (type === 'card_style') await env.DB.prepare('UPDATE users SET equipped_card_style = NULL WHERE id = ?').bind(user.id).run();
+        return jsonResponse({ success: true, message: 'Cosmetic unequipped' });
+      }
+
+      // Check ownership
+      const owns = await env.DB.prepare(
+        'SELECT id FROM user_cosmetics WHERE user_id = ? AND cosmetic_id = ?'
+      ).bind(user.id, cosmeticId).first();
+      if (!owns) return jsonResponse({ error: 'You do not own this cosmetic' }, 403);
+
+      // Get cosmetic info
+      const cosmetic = await env.DB.prepare('SELECT * FROM cosmetics WHERE id = ?').bind(cosmeticId).first();
+      if (!cosmetic) return jsonResponse({ error: 'Cosmetic not found' }, 404);
+
+      // Equip based on type
+      if (cosmetic.type === 'title') {
+        await env.DB.prepare('UPDATE users SET equipped_title = ? WHERE id = ?').bind(cosmetic.css_value, user.id).run();
+      } else if (cosmetic.type === 'background') {
+        await env.DB.prepare('UPDATE users SET equipped_background = ? WHERE id = ?').bind(cosmetic.css_value, user.id).run();
+      } else if (cosmetic.type === 'card_style') {
+        await env.DB.prepare('UPDATE users SET equipped_card_style = ? WHERE id = ?').bind(cosmetic.css_value, user.id).run();
+      }
+
+      return jsonResponse({ success: true, message: `Equipped ${cosmetic.name}` });
+    }
+
+    // --- BATTLE PASS: CHECK & UNLOCK ---
+    // Called when a player levels up to auto-unlock battle pass items
+    if (path === 'cosmetics/check-unlocks' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      // Find all battle pass items at or below user's level that they don't own
+      const unlockable = await env.DB.prepare(`
+        SELECT c.* FROM cosmetics c
+        WHERE c.source = 'battlepass'
+          AND c.battlepass_level <= ?
+          AND c.id NOT IN (SELECT cosmetic_id FROM user_cosmetics WHERE user_id = ?)
+        ORDER BY c.battlepass_level ASC
+      `).bind(user.level, user.id).all();
+
+      const newUnlocks = [];
+      for (const item of unlockable.results) {
+        await env.DB.prepare(
+          'INSERT OR IGNORE INTO user_cosmetics (user_id, cosmetic_id) VALUES (?, ?)'
+        ).bind(user.id, item.id).run();
+        newUnlocks.push(item);
+      }
+
+      return jsonResponse({ unlocked: newUnlocks });
+    }
+
+    // --- CRATE SPIN: GET A SPIN AFTER MATCH WIN ---
+    if (path === 'cosmetics/crate-spin' && method === 'POST') {
+      const user = await getSessionUser(request, env);
+      if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      const body = await request.json();
+      const placement = parseInt(body.placement) || 99;
+
+      // Get all crate cosmetics the user doesn't own
+      const available = await env.DB.prepare(`
+        SELECT c.* FROM cosmetics c
+        WHERE c.source = 'crate'
+          AND c.id NOT IN (SELECT cosmetic_id FROM user_cosmetics WHERE user_id = ?)
+      `).bind(user.id).all();
+
+      if (available.results.length === 0) {
+        return jsonResponse({ item: null, message: 'You already own all crate items!' });
+      }
+
+      // Weight by rarity — higher placement (lower number) = better odds
+      const rarityWeights = {
+        common:    { 1: 20, 2: 30, 3: 45, default: 60 },
+        uncommon:  { 1: 25, 2: 25, 3: 25, default: 25 },
+        rare:      { 1: 25, 2: 22, 3: 15, default: 10 },
+        epic:      { 1: 20, 2: 15, 3: 10, default: 4 },
+        legendary: { 1: 10, 2: 8,  3: 5,  default: 1 },
+      };
+
+      const pool = [];
+      for (const item of available.results) {
+        const tierWeights = rarityWeights[item.rarity] || rarityWeights.common;
+        const weight = tierWeights[placement] || tierWeights.default;
+        for (let i = 0; i < weight; i++) {
+          pool.push(item);
+        }
+      }
+
+      // Pick a random item from the weighted pool
+      const randomIdx = crypto.getRandomValues(new Uint32Array(1))[0] % pool.length;
+      const won = pool[randomIdx];
+
+      // Give it to the user
+      await env.DB.prepare(
+        'INSERT OR IGNORE INTO user_cosmetics (user_id, cosmetic_id) VALUES (?, ?)'
+      ).bind(user.id, won.id).run();
+
+      // Build the full spin reel (for animation) — 20 items with the winner at position 15
+      const reel = [];
+      for (let i = 0; i < 20; i++) {
+        if (i === 15) {
+          reel.push(won);
+        } else {
+          // Random item from all crate cosmetics (including ones they might own, for visual variety)
+          const allCrate = await env.DB.prepare("SELECT * FROM cosmetics WHERE source = 'crate'").all();
+          const randItem = allCrate.results[crypto.getRandomValues(new Uint32Array(1))[0] % allCrate.results.length];
+          reel.push(randItem);
+        }
+      }
+
+      return jsonResponse({ item: won, reel, placement });
+    }
+
+    // ======================================
     // 404 — Unknown route
     // ======================================
     return jsonResponse({ error: 'Not found', path }, 404);

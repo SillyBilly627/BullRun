@@ -129,6 +129,8 @@ const App = (() => {
       case 'lobbies': Lobby.load(); break;
       case 'leaderboard': Leaderboard.show('weekly'); break;
       case 'profile': Profile.loadOwn(); break;
+      case 'cosmetics': Cosmetics.load(); break;
+      case 'admin': Admin.load(); break;
     }
   }
 
@@ -223,7 +225,25 @@ const App = (() => {
     document.getElementById('announcement-banner').style.display = 'none';
   }
 
-  return { onLogin, navigate, updateNav, dismissAnnouncement };
+  // Secret admin access: click the nav logo 5 times rapidly
+  let adminClickCount = 0;
+  let adminClickTimer = null;
+  function handleLogoClick() {
+    adminClickCount++;
+    clearTimeout(adminClickTimer);
+    adminClickTimer = setTimeout(() => { adminClickCount = 0; }, 2000);
+    if (adminClickCount >= 5) {
+      adminClickCount = 0;
+      // If already admin, go straight to admin page
+      if (currentUser && currentUser.is_admin) {
+        navigate('admin');
+      } else {
+        Admin.showModal();
+      }
+    }
+  }
+
+  return { onLogin, navigate, updateNav, dismissAnnouncement, handleLogoClick };
 })();
 
 // ============================================================
@@ -904,6 +924,12 @@ const Leaderboard = (() => {
       const rank = i + 1;
       const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
       const isMe = currentUser && p.id === currentUser.id;
+      const cardClass = p.equipped_card_style || '';
+      const titleName = p.equipped_title
+        ? (typeof Cosmetics !== 'undefined' && Cosmetics.COSMETIC_TITLE_MAP[p.equipped_title]
+           ? Cosmetics.COSMETIC_TITLE_MAP[p.equipped_title]
+           : p.equipped_title.replace('title-', ''))
+        : '';
 
       let valueDisplay;
       if (type === 'weekly') valueDisplay = formatMoney(p.money);
@@ -911,12 +937,12 @@ const Leaderboard = (() => {
       else valueDisplay = `Lv ${p.level}`;
 
       return `
-        <div class="lb-row ${isMe ? 'lb-me' : ''}" onclick="Profile.loadById(${p.id})" style="${isMe ? 'border-color:var(--blue);background:var(--blue-bg);' : ''}">
+        <div class="lb-row ${isMe ? 'lb-me' : ''} ${cardClass}" onclick="Profile.loadById(${p.id})" style="${isMe ? 'border-color:var(--blue);background:var(--blue-bg);' : ''}">
           <span class="lb-rank ${rankClass}">#${rank}</span>
           <div>
             <div class="lb-name">${p.username}${isMe ? ' (you)' : ''}</div>
             <div class="lb-detail">
-              ${p.equipped_title ? `<span style="color:var(--amber);">${p.equipped_title}</span> · ` : ''}
+              ${titleName ? `<span style="color:var(--amber);">${titleName}</span> · ` : ''}
               Level ${p.level || 1}
             </div>
           </div>
@@ -959,13 +985,20 @@ const Profile = (() => {
     const { profile, holdings, totalStocks, totalShares } = res.data;
     const initial = profile.username.charAt(0).toUpperCase();
     const isMe = currentUser && profile.id === currentUser.id;
+    const bgClass = profile.equipped_background ? `profile-${profile.equipped_background}` : '';
+    // Map title css_value to display name (look up from Cosmetics module if available)
+    const titleDisplay = profile.equipped_title
+      ? (typeof Cosmetics !== 'undefined' && Cosmetics.COSMETIC_TITLE_MAP[profile.equipped_title]
+         ? Cosmetics.COSMETIC_TITLE_MAP[profile.equipped_title]
+         : profile.equipped_title.replace('title-', '').replace(/([A-Z])/g, ' $1').trim())
+      : '';
 
     container.innerHTML = `
-      <div class="profile-header">
+      <div class="profile-header ${bgClass}">
         <div class="profile-avatar">${initial}</div>
         <div class="profile-info">
           <h2>${profile.username} ${isMe ? '<span style="color:var(--text-dim);font-size:0.8rem;">(you)</span>' : ''}</h2>
-          ${profile.equipped_title ? `<div class="profile-title">${profile.equipped_title}</div>` : ''}
+          ${titleDisplay ? `<div class="profile-title title-display">${titleDisplay}</div>` : ''}
           <div style="color:var(--text-muted);font-size:0.82rem;margin-top:0.25rem;">
             Joined ${new Date(profile.created_at).toLocaleDateString('en-AU', { year: 'numeric', month: 'long' })}
           </div>
@@ -2000,8 +2033,14 @@ const Chat = (() => {
         const time = new Date(m.created_at + 'Z');
         const timeStr = time.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
         const isMe = currentUser && m.username === currentUser.username;
+        const chatTitle = m.equipped_title
+          ? (typeof Cosmetics !== 'undefined' && Cosmetics.COSMETIC_TITLE_MAP[m.equipped_title]
+             ? Cosmetics.COSMETIC_TITLE_MAP[m.equipped_title]
+             : '')
+          : '';
         div.innerHTML = `
           <span class="chat-msg-user" style="${isMe ? 'color:var(--gain);' : ''}">${m.username}</span>
+          ${chatTitle ? `<span class="title-display" style="color:var(--amber);font-size:0.65rem;">${chatTitle}</span>` : ''}
           <span class="chat-msg-level">Lv${m.level}</span>
           <span class="chat-msg-time">${timeStr}</span>
           <div class="chat-msg-text">${m.message}</div>
@@ -2046,6 +2085,519 @@ const Chat = (() => {
 })();
 
 // ============================================================
+// ADMIN — Admin Panel Module
+// ============================================================
+const Admin = (() => {
+  let allUsers = [];
+  let chatEnabled = true;
+
+  function showModal() {
+    document.getElementById('admin-modal').style.display = 'flex';
+    document.getElementById('admin-password-input').value = '';
+    document.getElementById('admin-password-error').textContent = '';
+    setTimeout(() => document.getElementById('admin-password-input').focus(), 100);
+  }
+
+  function closeModal() {
+    document.getElementById('admin-modal').style.display = 'none';
+  }
+
+  async function verify() {
+    const password = document.getElementById('admin-password-input').value;
+    if (!password) {
+      document.getElementById('admin-password-error').textContent = 'Enter the admin password';
+      return;
+    }
+    const res = await API.adminVerify(password);
+    if (res.ok) {
+      currentUser.is_admin = 1;
+      closeModal();
+      showToast('Admin access granted', 'success');
+      App.navigate('admin');
+    } else {
+      document.getElementById('admin-password-error').textContent = res.data.error || 'Invalid password';
+    }
+  }
+
+  async function load() {
+    await loadUsers();
+    await loadLobbies();
+    await loadStockControls();
+    await loadChatStatus();
+  }
+
+  async function loadChatStatus() {
+    const res = await API.adminGetConfig();
+    if (res.ok) {
+      const chatConf = res.data.config.find(c => c.key === 'chat_enabled');
+      chatEnabled = chatConf && chatConf.value === '1';
+      const btn = document.getElementById('admin-chat-toggle-btn');
+      if (btn) btn.textContent = chatEnabled ? '💬 Disable Chat' : '💬 Enable Chat';
+    }
+  }
+
+  async function loadUsers() {
+    const res = await API.adminGetUsers();
+    if (!res.ok) return;
+    allUsers = res.data.users;
+    renderUsers(allUsers);
+  }
+
+  function filterUsers() {
+    const q = document.getElementById('admin-user-search').value.toLowerCase();
+    const filtered = allUsers.filter(u => u.username.toLowerCase().includes(q));
+    renderUsers(filtered);
+  }
+
+  function renderUsers(users) {
+    const tbody = document.getElementById('admin-users-body');
+    if (users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="placeholder-text">No users found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = users.map(u => {
+      const status = u.is_banned ? '<span class="badge badge-red">BANNED</span>' :
+                     u.chat_banned ? '<span class="badge badge-yellow">CHAT BAN</span>' :
+                     u.is_admin ? '<span class="badge badge-blue">ADMIN</span>' :
+                     '<span class="badge badge-green">ACTIVE</span>';
+      return `<tr>
+        <td>${u.id}</td>
+        <td class="mono">${u.username}</td>
+        <td>${u.level}</td>
+        <td class="mono">${formatMoney(u.money)}</td>
+        <td>${u.xp}</td>
+        <td>${status}</td>
+        <td class="admin-actions-cell">
+          <button class="btn btn-sm btn-secondary" onclick="Admin.editUser(${u.id})" title="Edit">✏️</button>
+          ${u.is_banned
+            ? `<button class="btn btn-sm btn-primary" onclick="Admin.unban(${u.id})" title="Unban">🔓</button>`
+            : `<button class="btn btn-sm btn-danger" onclick="Admin.ban(${u.id})" title="Ban">🔨</button>`
+          }
+          ${u.chat_banned
+            ? `<button class="btn btn-sm btn-primary" onclick="Admin.chatUnban(${u.id})" title="Chat Unban">💬</button>`
+            : `<button class="btn btn-sm btn-secondary" onclick="Admin.chatBan(${u.id})" title="Chat Ban">🤐</button>`
+          }
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function ban(userId) {
+    const reason = prompt('Ban reason (optional):') || '';
+    if (!confirm('Ban this user?')) return;
+    const res = await API.adminBan(userId, true, reason);
+    if (res.ok) { showToast('User banned', 'success'); loadUsers(); }
+    else showToast(res.data.error, 'error');
+  }
+
+  async function unban(userId) {
+    const res = await API.adminBan(userId, false);
+    if (res.ok) { showToast('User unbanned', 'success'); loadUsers(); }
+    else showToast(res.data.error, 'error');
+  }
+
+  async function chatBan(userId) {
+    const res = await API.adminChatBan(userId, true);
+    if (res.ok) { showToast('User chat banned', 'success'); loadUsers(); }
+    else showToast(res.data.error, 'error');
+  }
+
+  async function chatUnban(userId) {
+    const res = await API.adminChatBan(userId, false);
+    if (res.ok) { showToast('User chat unbanned', 'success'); loadUsers(); }
+    else showToast(res.data.error, 'error');
+  }
+
+  function editUser(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
+    const action = prompt(
+      `Edit ${user.username}\n` +
+      `Current Money: ${formatMoney(user.money)}\n` +
+      `Current XP: ${user.xp} (Level ${user.level})\n\n` +
+      `Type:\n  money:AMOUNT  (e.g. money:50000)\n  xp:AMOUNT  (e.g. xp:1000)\n  admin:1 or admin:0`
+    );
+    if (!action) return;
+    const [key, val] = action.split(':');
+    if (key === 'money') {
+      const amt = parseFloat(val);
+      if (isNaN(amt)) { showToast('Invalid amount', 'error'); return; }
+      API.adminSetMoney(userId, amt).then(res => {
+        if (res.ok) { showToast(res.data.message, 'success'); loadUsers(); }
+        else showToast(res.data.error, 'error');
+      });
+    } else if (key === 'xp') {
+      const xp = parseInt(val);
+      if (isNaN(xp)) { showToast('Invalid XP', 'error'); return; }
+      API.adminSetXp(userId, xp).then(res => {
+        if (res.ok) { showToast(res.data.message, 'success'); loadUsers(); }
+        else showToast(res.data.error, 'error');
+      });
+    } else if (key === 'admin') {
+      API.adminToggleAdmin(userId, val === '1').then(res => {
+        if (res.ok) { showToast(res.data.message, 'success'); loadUsers(); }
+        else showToast(res.data.error, 'error');
+      });
+    } else {
+      showToast('Unknown command. Use money:, xp:, or admin:', 'error');
+    }
+  }
+
+  async function loadLobbies() {
+    const el = document.getElementById('admin-lobbies-list');
+    const res = await API.adminGetLobbies();
+    if (!res.ok) { el.innerHTML = '<p class="placeholder-text">Failed to load</p>'; return; }
+    const lobbies = res.data.lobbies;
+    if (lobbies.length === 0) {
+      el.innerHTML = '<p class="empty-state">No active lobbies</p>';
+      return;
+    }
+    el.innerHTML = lobbies.map(l => `
+      <div class="admin-lobby-row">
+        <div>
+          <span class="mono" style="font-weight:600;">${l.name}</span>
+          <span class="text-muted" style="margin-left:0.5rem;">${l.status} · ${l.player_count}/${l.max_players} players · by ${l.creator_name}</span>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="Admin.forceCloseLobby(${l.id})">Force Close</button>
+      </div>
+    `).join('');
+  }
+
+  async function forceCloseLobby(lobbyId) {
+    if (!confirm('Force close this lobby? Active matches will be scored.')) return;
+    const res = await API.adminForceCloseLobby(lobbyId);
+    if (res.ok) { showToast('Lobby closed', 'success'); loadLobbies(); }
+    else showToast(res.data.error, 'error');
+  }
+
+  async function loadStockControls() {
+    const el = document.getElementById('admin-stock-controls');
+    const res = await API.getStocks();
+    if (!res.ok) { el.innerHTML = '<p class="placeholder-text">Failed to load</p>'; return; }
+    el.innerHTML = `
+      <div class="admin-stock-grid">
+        ${res.data.stocks.map(s => `
+          <div class="admin-stock-item">
+            <span class="mono" style="font-weight:600;">${s.symbol}</span>
+            <span class="mono">${formatMoney(s.current_price)}</span>
+            <input type="number" id="admin-stock-price-${s.id}" step="0.01" min="0.01"
+                   placeholder="New price" style="width:100px;">
+            <button class="btn btn-sm btn-secondary" onclick="Admin.setStockPrice(${s.id})">Set</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  async function setStockPrice(stockId) {
+    const input = document.getElementById(`admin-stock-price-${stockId}`);
+    const price = parseFloat(input.value);
+    if (isNaN(price) || price < 0.01) { showToast('Invalid price', 'error'); return; }
+    const res = await API.adminSetStockPrice(stockId, price);
+    if (res.ok) { showToast(res.data.message, 'success'); input.value = ''; loadStockControls(); }
+    else showToast(res.data.error, 'error');
+  }
+
+  function showAnnouncementForm() {
+    const el = document.getElementById('admin-announcement-form');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    if (el.style.display === 'block') {
+      document.getElementById('admin-announcement-input').focus();
+    }
+  }
+
+  async function pushAnnouncement() {
+    const msg = document.getElementById('admin-announcement-input').value.trim();
+    if (!msg) { showToast('Enter an announcement message', 'error'); return; }
+    const res = await API.adminAnnouncement(msg);
+    if (res.ok) {
+      showToast('Announcement pushed', 'success');
+      document.getElementById('admin-announcement-input').value = '';
+      document.getElementById('admin-announcement-form').style.display = 'none';
+    } else showToast(res.data.error, 'error');
+  }
+
+  async function clearAnnouncements() {
+    if (!confirm('Clear all announcements?')) return;
+    const res = await API.adminAnnouncement('', 'clear');
+    if (res.ok) showToast('Announcements cleared', 'success');
+    else showToast(res.data.error, 'error');
+  }
+
+  async function toggleChat() {
+    chatEnabled = !chatEnabled;
+    const res = await API.adminToggleChat(chatEnabled);
+    if (res.ok) {
+      showToast(res.data.message, 'success');
+      const btn = document.getElementById('admin-chat-toggle-btn');
+      if (btn) btn.textContent = chatEnabled ? '💬 Disable Chat' : '💬 Enable Chat';
+    } else showToast(res.data.error, 'error');
+  }
+
+  async function clearChat() {
+    if (!confirm('Clear ALL chat messages? This cannot be undone.')) return;
+    const res = await API.adminClearChat();
+    if (res.ok) showToast('Chat cleared', 'success');
+    else showToast(res.data.error, 'error');
+  }
+
+  async function weeklyReset() {
+    if (!confirm('⚠️ WEEKLY RESET\n\nThis will:\n• Reset ALL player money to $10,000\n• Delete ALL portfolios\n• Reset ALL stock prices\n• Clear ALL trade history\n\nAre you sure?')) return;
+    if (!confirm('This is IRREVERSIBLE. Type YES to confirm (press OK).')) return;
+    const res = await API.adminWeeklyReset();
+    if (res.ok) showToast(res.data.message, 'success');
+    else showToast(res.data.error, 'error');
+  }
+
+  return {
+    showModal, closeModal, verify, load,
+    loadUsers, filterUsers, ban, unban, chatBan, chatUnban, editUser,
+    loadLobbies, forceCloseLobby, loadStockControls, setStockPrice,
+    showAnnouncementForm, pushAnnouncement, clearAnnouncements,
+    toggleChat, clearChat, weeklyReset,
+  };
+})();
+
+// ============================================================
+// COSMETICS — Locker, Battle Pass, Crate Spin
+// ============================================================
+const Cosmetics = (() => {
+  let allCosmetics = [];
+  let currentFilter = 'all';
+
+  // Rarity colors
+  const RARITY_COLORS = {
+    common: '#9ca3af',
+    uncommon: '#22c55e',
+    rare: '#3b82f6',
+    epic: '#a855f7',
+    legendary: '#f59e0b',
+  };
+
+  // Readable title mapping for equipped display
+  const COSMETIC_TITLE_MAP = {};
+
+  async function load() {
+    const res = await API.getCosmetics();
+    if (!res.ok) return;
+    allCosmetics = res.data.cosmetics;
+
+    // Build title map
+    allCosmetics.forEach(c => { COSMETIC_TITLE_MAP[c.css_value] = c.name; });
+
+    // Check for new battle pass unlocks
+    const unlockRes = await API.checkUnlocks();
+    if (unlockRes.ok && unlockRes.data.unlocked.length > 0) {
+      unlockRes.data.unlocked.forEach(item => {
+        showToast(`🎉 Battle Pass Unlock: ${item.name}!`, 'success');
+      });
+      // Reload cosmetics after unlocks
+      const refreshed = await API.getCosmetics();
+      if (refreshed.ok) allCosmetics = refreshed.data.cosmetics;
+    }
+
+    renderEquipped(res.data.equipped);
+    renderGrid();
+  }
+
+  function showTab(tab) {
+    document.querySelectorAll('.cos-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.cos-tab-content').forEach(t => t.style.display = 'none');
+    document.querySelector(`.cos-tab[onclick*="${tab}"]`).classList.add('active');
+    document.getElementById(`cos-tab-${tab}`).style.display = 'block';
+    if (tab === 'battlepass') renderBattlePass();
+  }
+
+  function renderEquipped(equipped) {
+    const el = document.getElementById('cos-equipped-bar');
+    const titleName = equipped.title ? (COSMETIC_TITLE_MAP[equipped.title] || equipped.title) : 'None';
+    const bgName = equipped.background ? (COSMETIC_TITLE_MAP[equipped.background] || equipped.background) : 'None';
+    const cardName = equipped.card_style ? (COSMETIC_TITLE_MAP[equipped.card_style] || equipped.card_style) : 'None';
+
+    el.innerHTML = `
+      <div class="cos-equipped-section">
+        <h3>Currently Equipped</h3>
+        <div class="cos-equipped-slots">
+          <div class="cos-slot">
+            <span class="cos-slot-label">Title</span>
+            <span class="cos-slot-value">${titleName}</span>
+            ${equipped.title ? `<button class="btn btn-sm btn-secondary" onclick="Cosmetics.unequip('title')">Remove</button>` : ''}
+          </div>
+          <div class="cos-slot">
+            <span class="cos-slot-label">Background</span>
+            <span class="cos-slot-value">${bgName}</span>
+            ${equipped.background ? `<button class="btn btn-sm btn-secondary" onclick="Cosmetics.unequip('background')">Remove</button>` : ''}
+          </div>
+          <div class="cos-slot">
+            <span class="cos-slot-label">Card Style</span>
+            <span class="cos-slot-value">${cardName}</span>
+            ${equipped.card_style ? `<button class="btn btn-sm btn-secondary" onclick="Cosmetics.unequip('card_style')">Remove</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function filter(type) {
+    currentFilter = type;
+    document.querySelectorAll('.cos-filter').forEach(f => f.classList.toggle('active', f.dataset.filter === type));
+    renderGrid();
+  }
+
+  function renderGrid() {
+    const el = document.getElementById('cos-grid');
+    let items = allCosmetics.filter(c => c.owned);
+    if (currentFilter !== 'all') items = items.filter(c => c.type === currentFilter);
+
+    if (items.length === 0) {
+      el.innerHTML = '<p class="empty-state">No cosmetics owned yet. Level up to unlock Battle Pass items, or win lobby matches for crate spins!</p>';
+      return;
+    }
+
+    el.innerHTML = items.map(c => {
+      const rarityColor = RARITY_COLORS[c.rarity] || '#9ca3af';
+      return `
+        <div class="cos-card ${c.equipped ? 'cos-equipped' : ''}" style="border-color:${rarityColor};" onclick="Cosmetics.equip(${c.id})">
+          <div class="cos-card-rarity" style="background:${rarityColor};">${c.rarity}</div>
+          <div class="cos-card-icon">${c.type === 'title' ? '🏷️' : c.type === 'background' ? '🎨' : '🃏'}</div>
+          <div class="cos-card-name">${c.name}</div>
+          <div class="cos-card-desc">${c.description}</div>
+          <div class="cos-card-type">${c.type.replace('_', ' ')}</div>
+          ${c.equipped ? '<div class="cos-card-equipped-badge">EQUIPPED</div>' : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function equip(cosmeticId) {
+    const item = allCosmetics.find(c => c.id === cosmeticId);
+    if (!item || !item.owned) return;
+
+    if (item.equipped) {
+      // Already equipped — unequip it
+      await unequip(item.type);
+      return;
+    }
+
+    const res = await API.equipCosmetic(cosmeticId);
+    if (res.ok) {
+      showToast(`Equipped ${item.name}`, 'success');
+      load(); // Refresh
+    } else {
+      showToast(res.data.error, 'error');
+    }
+  }
+
+  async function unequip(type) {
+    const res = await API.unequipCosmetic(type);
+    if (res.ok) {
+      showToast('Cosmetic removed', 'info');
+      load();
+    } else {
+      showToast(res.data.error, 'error');
+    }
+  }
+
+  function renderBattlePass() {
+    const bpItems = allCosmetics.filter(c => c.source === 'battlepass').sort((a, b) => a.battlepass_level - b.battlepass_level);
+    const headerEl = document.getElementById('bp-header');
+    const trackEl = document.getElementById('bp-track');
+    const userLevel = currentUser ? currentUser.level : 1;
+
+    headerEl.innerHTML = `
+      <div class="bp-info">
+        <h3>Battle Pass — Level ${userLevel}</h3>
+        <p class="text-muted">Unlock cosmetics by leveling up through trading and lobby matches</p>
+      </div>
+    `;
+
+    trackEl.innerHTML = bpItems.map(item => {
+      const unlocked = item.owned;
+      const rarityColor = RARITY_COLORS[item.rarity] || '#9ca3af';
+      return `
+        <div class="bp-item ${unlocked ? 'bp-unlocked' : 'bp-locked'}" style="--rarity-color:${rarityColor};">
+          <div class="bp-level-marker">Lv ${item.battlepass_level}</div>
+          <div class="bp-item-card" style="border-color:${unlocked ? rarityColor : '#333'};">
+            <div class="bp-item-icon">${item.type === 'title' ? '🏷️' : item.type === 'background' ? '🎨' : '🃏'}</div>
+            <div class="bp-item-name">${item.name}</div>
+            <div class="bp-item-rarity" style="color:${rarityColor};">${item.rarity}</div>
+            ${unlocked ? '<div class="bp-item-check">✓</div>' : '<div class="bp-item-lock">🔒</div>'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Crate spin — called from post-match results
+  async function openCrate(placement) {
+    document.getElementById('crate-modal').style.display = 'flex';
+    document.getElementById('crate-result').style.display = 'none';
+    document.getElementById('crate-subtitle').textContent = `Placement #${placement} — Spinning...`;
+
+    const res = await API.crateSpin(placement);
+    if (!res.ok || !res.data.item) {
+      document.getElementById('crate-subtitle').textContent = res.data.message || 'No items available';
+      document.getElementById('crate-result').style.display = 'block';
+      document.getElementById('crate-result-item').innerHTML = '<p>You already own all crate items!</p>';
+      return;
+    }
+
+    const { item, reel } = res.data;
+    const reelEl = document.getElementById('crate-reel');
+
+    // Build reel items
+    reelEl.innerHTML = reel.map(r => {
+      const col = RARITY_COLORS[r.rarity] || '#9ca3af';
+      return `
+        <div class="crate-reel-item" style="border-color:${col};">
+          <span class="crate-reel-icon">${r.type === 'title' ? '🏷️' : r.type === 'background' ? '🎨' : '🃏'}</span>
+          <span class="crate-reel-name">${r.name}</span>
+          <span class="crate-reel-rarity" style="color:${col};">${r.rarity}</span>
+        </div>
+      `;
+    }).join('');
+
+    // Animate the reel
+    reelEl.style.transition = 'none';
+    reelEl.style.transform = 'translateX(0)';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        // Each item is 140px wide. We want to land on item 15 (index 15).
+        // Center it: offset = 15 * 140 - viewport/2 + 70
+        const offset = 15 * 140 - 230;
+        reelEl.style.transition = 'transform 4s cubic-bezier(0.15, 0.85, 0.2, 1)';
+        reelEl.style.transform = `translateX(-${offset}px)`;
+      });
+    });
+
+    // Show result after animation
+    setTimeout(() => {
+      const col = RARITY_COLORS[item.rarity] || '#9ca3af';
+      document.getElementById('crate-subtitle').textContent = 'You won:';
+      document.getElementById('crate-result').style.display = 'block';
+      document.getElementById('crate-result-item').innerHTML = `
+        <div class="crate-won-card" style="border-color:${col};">
+          <div class="crate-won-rarity" style="background:${col};">${item.rarity}</div>
+          <div class="crate-won-icon">${item.type === 'title' ? '🏷️' : item.type === 'background' ? '🎨' : '🃏'}</div>
+          <div class="crate-won-name">${item.name}</div>
+          <div class="crate-won-desc">${item.description}</div>
+        </div>
+      `;
+    }, 4200);
+  }
+
+  function closeCrate() {
+    document.getElementById('crate-modal').style.display = 'none';
+  }
+
+  return {
+    load, showTab, filter, equip, unequip,
+    renderBattlePass, openCrate, closeCrate,
+    RARITY_COLORS, COSMETIC_TITLE_MAP,
+  };
+})();
+
+// ============================================================
 // INITIALIZATION — Run on page load
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -2074,5 +2626,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     Market.closeModal();
     if (typeof Lobby !== 'undefined') Lobby.closeStockModal();
+    if (typeof Admin !== 'undefined') Admin.closeModal();
+    if (typeof Cosmetics !== 'undefined') Cosmetics.closeCrate();
   }
 });

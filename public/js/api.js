@@ -220,6 +220,92 @@ const API = (() => {
     return post('chat/send', { message });
   }
 
+  // ---- ADMIN ENDPOINTS ----
+  async function adminVerify(password) {
+    return post('admin/verify', { password });
+  }
+
+  async function adminGetUsers() {
+    return get('admin/users');
+  }
+
+  async function adminBan(userId, ban = true, reason = '') {
+    return post('admin/ban', { userId, ban, reason });
+  }
+
+  async function adminChatBan(userId, ban = true) {
+    return post('admin/chat-ban', { userId, ban });
+  }
+
+  async function adminSetMoney(userId, amount) {
+    return post('admin/set-money', { userId, amount });
+  }
+
+  async function adminSetXp(userId, xp) {
+    return post('admin/set-xp', { userId, xp });
+  }
+
+  async function adminSetStockPrice(stockId, price) {
+    return post('admin/set-stock-price', { stockId, price });
+  }
+
+  async function adminAnnouncement(message, action = 'create') {
+    return post('admin/announcement', { message, action });
+  }
+
+  async function adminToggleChat(enabled) {
+    return post('admin/toggle-chat', { enabled });
+  }
+
+  async function adminClearChat() {
+    return post('admin/clear-chat', {});
+  }
+
+  async function adminForceCloseLobby(lobbyId) {
+    return post('admin/force-close-lobby', { lobbyId });
+  }
+
+  async function adminGetLobbies() {
+    return get('admin/lobbies');
+  }
+
+  async function adminWeeklyReset() {
+    return post('admin/weekly-reset', {});
+  }
+
+  async function adminToggleAdmin(userId, admin = true) {
+    return post('admin/toggle-admin', { userId, admin });
+  }
+
+  async function adminGiveCosmetic(userId, cosmeticId) {
+    return post('admin/give-cosmetic', { userId, cosmeticId });
+  }
+
+  async function adminGetConfig() {
+    return get('admin/config');
+  }
+
+  // ---- COSMETICS ENDPOINTS ----
+  async function getCosmetics() {
+    return get('cosmetics');
+  }
+
+  async function equipCosmetic(cosmeticId) {
+    return post('cosmetics/equip', { cosmeticId });
+  }
+
+  async function unequipCosmetic(type) {
+    return post('cosmetics/equip', { unequip: true, type });
+  }
+
+  async function checkUnlocks() {
+    return post('cosmetics/check-unlocks', {});
+  }
+
+  async function crateSpin(placement) {
+    return post('cosmetics/crate-spin', { placement });
+  }
+
   // Public interface
   return {
     getToken, setToken,
@@ -235,5 +321,13 @@ const API = (() => {
     lobbyBuy, lobbySell, getLobbyPortfolio, getLobbyResults, getLobbyStockDetail, getAllLobbyHistory,
     // Chat
     getChatMessages, sendChatMessage,
+    // Admin
+    adminVerify, adminGetUsers, adminBan, adminChatBan,
+    adminSetMoney, adminSetXp, adminSetStockPrice,
+    adminAnnouncement, adminToggleChat, adminClearChat,
+    adminForceCloseLobby, adminGetLobbies, adminWeeklyReset,
+    adminToggleAdmin, adminGiveCosmetic, adminGetConfig,
+    // Cosmetics
+    getCosmetics, equipCosmetic, unequipCosmetic, checkUnlocks, crateSpin,
   };
 })();
