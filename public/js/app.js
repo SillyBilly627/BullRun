@@ -649,11 +649,11 @@ const Market = (() => {
     const basePct = stock.base_price > 0 ? ((stock.current_price - stock.base_price) / stock.base_price * 100) : 0;
 
     const rangeButtons = [
+      { mins: 15, label: '15m' },
       { mins: 30, label: '30m' },
       { mins: 60, label: '1h' },
-      { mins: 360, label: '6h' },
-      { mins: 720, label: '12h' },
-      { mins: 1440, label: '24h' },
+      { mins: 120, label: '2h' },
+      { mins: 240, label: '4h' },
     ];
 
     content.innerHTML = `
