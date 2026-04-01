@@ -175,6 +175,8 @@ Phase 1 has been tested and confirmed working locally:
 - **Admin panel page** — hidden page accessed by clicking the BullRun logo 5 times. Features: user management table (ban/unban, set money/XP, toggle admin), stock price manipulation, lobby force-close, announcement push/clear, chat toggle/clear, weekly reset button
 - **Admin password modal** — password prompt for first-time admin access (default: BullRun2026!)
 - **Cosmetic visuals** — equipped titles shown on profiles/leaderboard/chat, profile backgrounds applied as CSS gradients, leaderboard card styles with glow/border effects
+- **Glossary page ("Learn Trading")** — 50 real trading terms across 5 categories, searchable, category filters. Accessible from home page quick actions and nav bar book icon.
+- **Educational tooltips (ⓘ)** — hover info icons on home stats, portfolio cards, leaderboard tabs, stock detail modal (chart types, volatility, cost basis, P/L), and LIVE badge
 
 ### Database Tables Created
 
@@ -263,7 +265,7 @@ Users, stocks (70 total: 32 real + 38 fictional), portfolios, transactions, stoc
 **Other Phase 4 items:**
 - [x] **Weekly reset** — admin panel button triggers reset: all user money to $10,000, clear portfolios, reset stock prices to base, clear stock history and transactions. Double confirmation prompt.
 - [x] **Crate spin trigger from lobby results** — "Open Crate Spin!" button appears on post-match results for players who placed top 3, calls `Cosmetics.openCrate(placement)`.
-- [ ] **Educational features** — tooltips throughout the app explaining stock concepts, glossary page with trading terminology, contextual hints, post-trade summaries explaining real-world equivalents.
+- [x] **Educational features** — glossary page with 50 real trading terms across 5 categories (Basics, Trading, Analysis, Market, Slang), searchable with category filters. Info tooltips (ⓘ) placed throughout the app: home stats, portfolio summary cards, leaderboard tabs, stock detail modal (chart types, volatility, cost basis, unrealised P/L), and LIVE badge. Context-aware post-trade tips with 10 buy tips and 11 sell tips that teach concepts like market orders, diversification, cost basis, realising gains, stop losses, and more — tips adapt based on trade context (spent too much, volatile stock, partial profit, etc.).
 - [ ] **Security review** — rate limiting, input validation audit, XSS prevention audit.
 - [ ] **Native Swift wrapper apps** — macOS + iOS/iPadOS using WKWebView in SwiftUI (stretch goal, only if time allows).
 

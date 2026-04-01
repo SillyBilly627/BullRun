@@ -121,6 +121,82 @@ function xpForLevel(level) {
 }
 
 // ----------------------------------------------------------
+// EDUCATIONAL TIP GENERATORS — Context-aware trade tips
+// ----------------------------------------------------------
+// These rotate through educational tips based on what the
+// player just did, teaching real trading concepts naturally.
+// ----------------------------------------------------------
+
+const BUY_TIPS = [
+  "This is a 'market order' — you buy at the current price. In real markets, you can also set 'limit orders' to buy at a specific price.",
+  "Diversifying across multiple stocks reduces your risk. In finance, this is called 'portfolio diversification.'",
+  "The price you paid is your 'cost basis.' Your profit or loss is calculated from this price when you sell.",
+  "In real markets, buying a stock makes you a partial owner of that company. You'd receive dividends if they pay them.",
+  "Professional traders often buy in smaller amounts over time rather than all at once. This strategy is called 'dollar-cost averaging.'",
+  "The 'bid-ask spread' is the gap between what buyers offer and sellers want. In real markets, this spread is a hidden cost of trading.",
+  "Stock prices are driven by supply and demand — when more people want to buy, prices go up. That's happening here too!",
+  "In real trading, you'd pay a broker commission or fee on each trade. Many modern brokers now offer commission-free trading.",
+  "The 'market cap' of a company is its stock price multiplied by total shares. It tells you the company's total value.",
+  "Smart investors research a company's financials before buying. This is called 'fundamental analysis.'",
+];
+
+const SELL_TIPS_PROFIT = [
+  "Nice trade! Selling at a profit is called 'realising a gain.' Until you sell, it's just an 'unrealised gain' — paper profit.",
+  "You locked in your profit! In real trading, knowing when to sell is often harder than knowing when to buy.",
+  "Professional traders set profit targets before buying. If a stock hits their target, they sell — no emotions involved.",
+  "In real markets, you'd owe capital gains tax on this profit. Short-term gains (under 1 year) are taxed higher than long-term.",
+  "Warren Buffett's rule: 'Be fearful when others are greedy, and greedy when others are fearful.' Selling at a peak takes discipline.",
+  "This profit added XP! In real life, consistent small profits often beat swinging for home runs.",
+];
+
+const SELL_TIPS_LOSS = [
+  "Selling at a loss is sometimes smart — it's called a 'stop loss.' It prevents a small loss from becoming a big one.",
+  "Even the best traders have losing trades. What matters is that your winners outweigh your losers over time.",
+  "In real markets, you can use a 'stop-loss order' to automatically sell if a stock drops below a price you set.",
+  "Cutting losses early is one of the most important skills in trading. Holding a falling stock hoping it recovers is called 'catching a falling knife.'",
+  "Professional traders accept that ~40% of their trades may lose money. Risk management is what separates pros from amateurs.",
+];
+
+function getBuyTip(shares, stock, totalCost, remainingMoney) {
+  // Context-specific tips
+  const spentPct = totalCost / (totalCost + remainingMoney) * 100;
+  if (spentPct > 50) {
+    return "You just spent over half your cash on one stock. In real trading, putting too much into one position is risky — it's called 'concentration risk.'";
+  }
+  if (stock.volatility > 0.035) {
+    return `${stock.symbol} is a volatile stock (moves a lot each tick). High volatility means bigger potential gains, but also bigger losses. In finance, volatility is measured by 'beta.'`;
+  }
+  if (shares >= 100) {
+    return "In real stock markets, 100 shares is called a 'round lot.' Orders of less than 100 are called 'odd lots.'";
+  }
+  // Random educational tip
+  const idx = crypto.getRandomValues(new Uint8Array(1))[0] % BUY_TIPS.length;
+  return BUY_TIPS[idx];
+}
+
+function getSellTip(shares, stock, profitLoss, holding, remainingShares) {
+  if (profitLoss > 0) {
+    // Sold entire position at profit
+    if (remainingShares <= 0) {
+      return "You closed your entire position at a profit! 'Closing a position' means you no longer hold any shares of this stock.";
+    }
+    // Partial sell at profit
+    if (remainingShares > 0 && profitLoss > 0) {
+      const pctGain = ((stock.current_price - holding.avg_buy_price) / holding.avg_buy_price * 100).toFixed(1);
+      if (parseFloat(pctGain) > 10) {
+        return `${pctGain}% gain! Selling some shares while keeping the rest is called 'taking partial profits' — it locks in gains while staying in the trade.`;
+      }
+    }
+    const idx = crypto.getRandomValues(new Uint8Array(1))[0] % SELL_TIPS_PROFIT.length;
+    return SELL_TIPS_PROFIT[idx];
+  } else if (profitLoss < 0) {
+    const idx = crypto.getRandomValues(new Uint8Array(1))[0] % SELL_TIPS_LOSS.length;
+    return SELL_TIPS_LOSS[idx];
+  }
+  return "You broke even — sold at exactly what you paid. In real markets, you'd still lose money due to trading fees and the bid-ask spread.";
+}
+
+// ----------------------------------------------------------
 // STOCK PRICE ENGINE — Random Walk + Player Pressure
 // ----------------------------------------------------------
 // This is the heart of the game. Every 30 seconds (configurable),
@@ -738,9 +814,7 @@ export async function onRequest(context) {
         message: `Bought ${shares} shares of ${stock.symbol} at $${stock.current_price.toFixed(2)} each`,
         totalCost,
         newBalance: updatedUser.money,
-        tip: shares === 1
-          ? "In real trading, this is called a 'market order' — you buy at the current price."
-          : "Tip: Diversifying across multiple stocks reduces your risk if one drops."
+        tip: getBuyTip(shares, stock, totalCost, updatedUser.money),
       });
     }
 
@@ -815,11 +889,7 @@ export async function onRequest(context) {
         profitLoss,
         xpEarned,
         newBalance: updatedUser.money,
-        tip: profitLoss > 0
-          ? `Nice trade! You made $${profitLoss.toFixed(2)} profit. In real markets, this is called "realising a gain."`
-          : profitLoss < 0
-            ? `You sold at a loss of $${Math.abs(profitLoss).toFixed(2)}. Sometimes cutting losses early is a smart strategy — it's called a "stop loss."`
-            : 'You broke even on this trade. No gain, no loss.'
+        tip: getSellTip(shares, stock, profitLoss, holding, remainingShares),
       });
     }
 

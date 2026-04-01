@@ -131,6 +131,7 @@ const App = (() => {
       case 'profile': Profile.loadOwn(); break;
       case 'cosmetics': Cosmetics.load(); break;
       case 'admin': Admin.load(); break;
+      case 'glossary': Glossary.load(); break;
     }
   }
 
@@ -659,7 +660,8 @@ const Market = (() => {
       <div class="stock-detail-header">
         <div class="sd-left">
           <h2>${stock.name}</h2>
-          <span class="sd-symbol">${stock.symbol}${stock.sector ? ' · ' + stock.sector : ''}</span>
+          <span class="sd-symbol">${stock.symbol}${stock.sector ? ' · ' + stock.sector : ''}${stock.volatility ? ` · Vol ${(stock.volatility * 100).toFixed(1)}%` : ''}</span>
+          ${stock.volatility ? `<span class="edu-tip" data-tip="Volatility: how much this stock moves per tick. ${stock.volatility > 0.03 ? 'This is a volatile stock — bigger swings, more risk and reward.' : 'This is a stable stock — smaller price movements.'}">ⓘ</span>` : ''}
         </div>
         <div style="text-align:right;">
           <div class="sd-price">${formatMoney(stock.current_price)}</div>
@@ -673,6 +675,7 @@ const Market = (() => {
         <div class="chart-controls-left">
           <button class="chart-toggle-btn ${currentChartType === 'line' ? 'active' : ''}" id="btn-line" onclick="Market.setChartType('line')">Line</button>
           <button class="chart-toggle-btn ${currentChartType === 'candle' ? 'active' : ''}" id="btn-candle" onclick="Market.setChartType('candle')">Candlestick</button>
+          <span class="edu-tip" data-tip="Line charts show closing prices over time. Candlestick charts show open, high, low, and close — green = price went up, red = down.">ⓘ</span>
         </div>
         <div class="chart-controls-center">
           ${rangeButtons.map(r => `
@@ -696,11 +699,11 @@ const Market = (() => {
 
       ${holding.shares > 0 ? `
         <div class="trade-holding-info">
-          You own <strong>${holding.shares}</strong> shares at avg price <strong>${formatMoney(holding.avg_buy_price)}</strong>
+          You own <strong>${holding.shares}</strong> shares at avg price <strong>${formatMoney(holding.avg_buy_price)}</strong> <span class="edu-tip" data-tip="Your 'cost basis' — the average price you paid across all your purchases of this stock.">ⓘ</span>
           · Current value: <strong>${formatMoney(holding.shares * stock.current_price)}</strong>
           · P/L: <span class="${formatPnlColor((stock.current_price - holding.avg_buy_price) * holding.shares)}">
             ${formatMoney((stock.current_price - holding.avg_buy_price) * holding.shares)}
-          </span>
+          </span> <span class="edu-tip" data-tip="This is your 'unrealised' profit or loss — it only becomes 'realised' when you sell.">ⓘ</span>
         </div>
       ` : ''}
 
@@ -2249,6 +2252,120 @@ const Chat = (() => {
 
   return { init, toggle, send, stopPolling };
 })();
+
+// ============================================================
+// GLOSSARY — Trading Terms & Educational Content
+// ============================================================
+const Glossary = (() => {
+  let currentCategory = 'all';
+
+  const TERMS = [
+    // Basics
+    { term: 'Stock', definition: 'A share of ownership in a company. When you buy a stock, you own a tiny piece of that business.', category: 'basics' },
+    { term: 'Share', definition: 'A single unit of stock. If you buy 10 shares of Apple, you own 10 units of Apple stock.', category: 'basics' },
+    { term: 'Portfolio', definition: 'The collection of all stocks (and other investments) you currently own.', category: 'basics' },
+    { term: 'Balance / Cash', definition: 'The money you have available to buy stocks. In BullRun, everyone starts with $10,000.', category: 'basics' },
+    { term: 'Net Worth', definition: 'Your total value — cash plus the current value of all stocks you own.', category: 'basics' },
+    { term: 'Broker', definition: 'A company that executes your buy and sell orders. In real life, popular brokers include CommSec, Interactive Brokers, and Robinhood.', category: 'basics' },
+    { term: 'Exchange', definition: 'A marketplace where stocks are bought and sold, like the ASX (Australian Securities Exchange) or NYSE (New York Stock Exchange).', category: 'basics' },
+    { term: 'Ticker Symbol', definition: 'A short code that identifies a stock. For example, AAPL = Apple, TSLA = Tesla. BullRun uses these for all stocks.', category: 'basics' },
+    { term: 'Dividend', definition: 'A payment a company makes to its shareholders from its profits. Not all companies pay dividends.', category: 'basics' },
+    { term: 'IPO', definition: 'Initial Public Offering — when a company first sells its stock to the public. Before an IPO, the company is "private."', category: 'basics' },
+
+    // Trading
+    { term: 'Market Order', definition: 'Buying or selling a stock at the current market price — this is what BullRun uses. You get the stock immediately at whatever the price is right now.', category: 'trading' },
+    { term: 'Limit Order', definition: 'An order to buy or sell only at a specific price or better. Unlike market orders, these might not execute immediately.', category: 'trading' },
+    { term: 'Stop Loss', definition: 'An order that automatically sells your stock if the price drops to a certain level. It limits how much you can lose on a trade.', category: 'trading' },
+    { term: 'Buy / Long', definition: 'Buying a stock because you think the price will go up. You profit when the price rises.', category: 'trading' },
+    { term: 'Sell / Close Position', definition: 'Selling stock you own. "Closing a position" means selling all your shares of a particular stock.', category: 'trading' },
+    { term: 'Short Selling', definition: 'Borrowing stock and selling it, hoping to buy it back cheaper later. You profit when prices fall. Very risky — not available in BullRun.', category: 'trading' },
+    { term: 'Day Trading', definition: 'Buying and selling stocks within the same day, trying to profit from small price movements.', category: 'trading' },
+    { term: 'Position', definition: 'The amount of a particular stock you own. "Opening a position" means buying, "closing" means selling all of it.', category: 'trading' },
+    { term: 'Cost Basis', definition: 'The average price you paid for your shares. BullRun shows this as "Avg Buy Price" — your profit/loss is calculated from this number.', category: 'trading' },
+    { term: 'Realised vs Unrealised Gains', definition: 'Unrealised = your stock went up but you haven\'t sold yet (paper profit). Realised = you sold and locked in the profit/loss.', category: 'trading' },
+    { term: 'Dollar-Cost Averaging', definition: 'Investing a fixed amount regularly regardless of price. This smooths out the impact of volatility over time.', category: 'trading' },
+    { term: 'Partial Profit', definition: 'Selling some of your shares while keeping the rest. This locks in some profit while staying in the trade.', category: 'trading' },
+
+    // Analysis
+    { term: 'Volatility', definition: 'How much a stock\'s price swings up and down. High volatility = bigger moves = more risk and more opportunity. In BullRun, each stock has a volatility rating.', category: 'analysis' },
+    { term: 'Candlestick Chart', definition: 'A chart showing four prices per period: open, high, low, close. Green candles = price went up. Red candles = price went down. The "wicks" show the high and low.', category: 'analysis' },
+    { term: 'Line Chart', definition: 'A simple chart connecting closing prices over time. Easier to read than candlesticks but shows less detail.', category: 'analysis' },
+    { term: 'Support Level', definition: 'A price level where a stock tends to stop falling because buyers step in. Think of it as a "floor."', category: 'analysis' },
+    { term: 'Resistance Level', definition: 'A price level where a stock tends to stop rising because sellers step in. Think of it as a "ceiling."', category: 'analysis' },
+    { term: 'Trend', definition: 'The general direction a stock is moving — up (bullish), down (bearish), or sideways (consolidating).', category: 'analysis' },
+    { term: 'Moving Average', definition: 'The average price over a set number of periods. Traders use 50-day and 200-day moving averages to identify trends.', category: 'analysis' },
+    { term: 'Volume', definition: 'The number of shares traded in a given period. High volume confirms a price move is significant.', category: 'analysis' },
+    { term: 'Fundamental Analysis', definition: 'Evaluating a stock by examining the company\'s financials, revenue, profits, and business model to determine if the price is fair.', category: 'analysis' },
+    { term: 'Technical Analysis', definition: 'Predicting future price movements by studying charts, patterns, and indicators. Candlestick charts are a key tool.', category: 'analysis' },
+
+    // Market
+    { term: 'Bull Market', definition: 'A market where prices are generally rising. Investors are optimistic. The bull charges upward — that\'s where BullRun gets its name!', category: 'market' },
+    { term: 'Bear Market', definition: 'A market where prices are generally falling (20%+ decline). Investors are pessimistic. The bear swipes downward.', category: 'market' },
+    { term: 'Market Cap', definition: 'A company\'s total value = stock price × total shares. Apple\'s market cap is over $3 trillion, making it the most valuable company.', category: 'market' },
+    { term: 'Sector', definition: 'A group of similar companies. Common sectors: Technology, Healthcare, Finance, Energy, Consumer. BullRun labels each stock\'s sector.', category: 'market' },
+    { term: 'Blue Chip', definition: 'A large, well-established company with a reliable track record. Apple, Microsoft, and Coca-Cola are blue chip stocks.', category: 'market' },
+    { term: 'Penny Stock', definition: 'A stock trading below $5. Very risky and volatile. Some BullRun fictional stocks start in this range.', category: 'market' },
+    { term: 'Market Correction', definition: 'A 10-20% price drop from recent highs. Corrections are normal and happen regularly in real markets.', category: 'market' },
+    { term: 'Crash', definition: 'A sudden, severe price drop (20%+) across the whole market. Famous crashes: 1929, 2008, March 2020.', category: 'market' },
+    { term: 'Liquidity', definition: 'How easily you can buy or sell a stock without affecting its price. Popular stocks like Apple have high liquidity.', category: 'market' },
+    { term: 'Mean Reversion', definition: 'The theory that prices tend to return to their average over time. BullRun uses this — stocks gently pull back toward their base price.', category: 'market' },
+
+    // Slang
+    { term: 'Diamond Hands 💎🙌', definition: 'Holding a stock through big drops without selling. The opposite of "paper hands." Popular meme term from Reddit.', category: 'slang' },
+    { term: 'Paper Hands 📄🙌', definition: 'Selling too early out of fear. The opposite of "diamond hands."', category: 'slang' },
+    { term: 'YOLO', definition: '"You Only Live Once" — putting all your money into one risky trade. Not recommended in real life!', category: 'slang' },
+    { term: 'To The Moon 🚀', definition: 'When a stock price is skyrocketing. "This stock is going to the moon!"', category: 'slang' },
+    { term: 'Bag Holder', definition: 'Someone stuck holding a stock that has dropped significantly. They\'re "holding the bag."', category: 'slang' },
+    { term: 'FOMO', definition: 'Fear Of Missing Out — buying a stock because everyone else is, usually at the top. Often leads to losses.', category: 'slang' },
+    { term: 'FUD', definition: 'Fear, Uncertainty, Doubt — negative news or rumours that make people panic sell.', category: 'slang' },
+    { term: 'Whale', definition: 'A trader with a lot of money who can move the market with their trades. In BullRun, heavy buying adds "buy pressure" to stocks.', category: 'slang' },
+    { term: 'Pump and Dump', definition: 'Artificially inflating a stock\'s price (pump), then selling at the top (dump). This is illegal in real markets.', category: 'slang' },
+    { term: 'Buy the Dip', definition: 'Buying a stock after its price drops, expecting it to recover. Works great when the company is strong, risky when it\'s not.', category: 'slang' },
+  ];
+
+  function load() {
+    renderTerms();
+  }
+
+  function setCategory(cat) {
+    currentCategory = cat;
+    document.querySelectorAll('.glos-cat').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+    renderTerms();
+  }
+
+  function filter() {
+    renderTerms();
+  }
+
+  function renderTerms() {
+    const search = (document.getElementById('glossary-search-input')?.value || '').toLowerCase();
+    let filtered = TERMS;
+    if (currentCategory !== 'all') filtered = filtered.filter(t => t.category === currentCategory);
+    if (search) filtered = filtered.filter(t => t.term.toLowerCase().includes(search) || t.definition.toLowerCase().includes(search));
+
+    const el = document.getElementById('glossary-list');
+    if (filtered.length === 0) {
+      el.innerHTML = '<p class="empty-state">No terms found matching your search.</p>';
+      return;
+    }
+
+    el.innerHTML = filtered.map(t => `
+      <div class="glos-item">
+        <div class="glos-term">${t.term}</div>
+        <div class="glos-def">${t.definition}</div>
+        <span class="glos-cat-tag">${t.category}</span>
+      </div>
+    `).join('');
+  }
+
+  return { load, setCategory, filter };
+})();
+
+// ============================================================
+// TOOLTIP — Hover tooltips for educational info icons
+// ============================================================
+// Usage in HTML: <span class="edu-tip" data-tip="Explanation here">ⓘ</span>
+// The CSS handles the hover popup styling.
 
 // ============================================================
 // ADMIN — Admin Panel Module

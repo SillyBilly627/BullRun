@@ -146,6 +146,9 @@
           <span class="level-badge">Lv <span id="nav-level-value">1</span></span>
           <div class="nav-xp-container" id="nav-xp-info"></div>
         </div>
+        <button class="nav-glossary-btn" onclick="App.navigate('glossary')" title="Trading Glossary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        </button>
         <button class="nav-profile-btn" onclick="App.navigate('profile')" title="Your Profile">
           <span id="nav-username">Player</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -170,7 +173,7 @@
             </div>
             <div class="welcome-stats">
               <div class="stat-item">
-                <span class="stat-label">Net Worth</span>
+                <span class="stat-label">Net Worth <span class="edu-tip" data-tip="Your total value: cash + current value of all stocks you own.">ⓘ</span></span>
                 <span class="stat-value" id="home-networth">$10,000.00</span>
               </div>
               <div class="stat-item">
@@ -178,11 +181,11 @@
                 <span class="stat-value" id="home-cash">$10,000.00</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Level</span>
+                <span class="stat-label">Level <span class="edu-tip" data-tip="Level up by earning XP. Unlocks Battle Pass cosmetics as you progress.">ⓘ</span></span>
                 <span class="stat-value" id="home-level">1</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">XP</span>
+                <span class="stat-label">XP <span class="edu-tip tip-left" data-tip="Earn XP from profitable trades (10 base + 5 per $100 profit) and lobby matches (25 participation + up to 100 for winning).">ⓘ</span></span>
                 <span class="stat-value" id="home-xp">0</span>
               </div>
             </div>
@@ -216,6 +219,12 @@
                 </div>
                 <span>Rankings</span>
               </button>
+              <button class="action-btn" onclick="App.navigate('glossary')">
+                <div class="action-icon" style="background:rgba(59,130,246,0.12);color:#3b82f6;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                </div>
+                <span>Learn Trading</span>
+              </button>
             </div>
           </div>
 
@@ -247,7 +256,7 @@
               <input type="text" id="stock-search" placeholder="Search stocks..." oninput="Market.filterStocks(this.value)">
             </div>
             <div class="market-live-badge">
-              <span class="live-dot"></span> LIVE
+              <span class="live-dot"></span> LIVE <span class="edu-tip" data-tip="Prices update every 30 seconds using a random walk algorithm. Player buy/sell activity pushes prices up or down.">ⓘ</span>
             </div>
           </div>
         </div>
@@ -281,19 +290,19 @@
         <div class="portfolio-summary" id="portfolio-summary">
           <div class="summary-cards">
             <div class="summary-card">
-              <span class="summary-label">Cash Balance</span>
+              <span class="summary-label">Cash Balance <span class="edu-tip" data-tip="Money available to buy stocks. You started with $10,000.">ⓘ</span></span>
               <span class="summary-value" id="portfolio-cash">$0.00</span>
             </div>
             <div class="summary-card">
-              <span class="summary-label">Holdings Value</span>
+              <span class="summary-label">Holdings Value <span class="edu-tip" data-tip="The current market value of all stocks you own. This changes as prices move.">ⓘ</span></span>
               <span class="summary-value" id="portfolio-holdings-value">$0.00</span>
             </div>
             <div class="summary-card">
-              <span class="summary-label">Total Net Worth</span>
+              <span class="summary-label">Total Net Worth <span class="edu-tip" data-tip="Cash + Holdings Value. This is what your portfolio is really worth right now.">ⓘ</span></span>
               <span class="summary-value" id="portfolio-networth">$0.00</span>
             </div>
             <div class="summary-card">
-              <span class="summary-label">Profit/Loss</span>
+              <span class="summary-label">Profit/Loss <span class="edu-tip tip-left" data-tip="How much you've gained or lost compared to what you paid. Green = profit, Red = loss. This is 'unrealised' until you sell.">ⓘ</span></span>
               <span class="summary-value" id="portfolio-pnl">$0.00</span>
             </div>
           </div>
@@ -484,9 +493,9 @@
       <div id="page-leaderboard" class="page">
         <h2>Rankings</h2>
         <div class="leaderboard-tabs">
-          <button class="lb-tab active" onclick="Leaderboard.show('weekly')">Weekly Money</button>
-          <button class="lb-tab" onclick="Leaderboard.show('alltime')">All-Time</button>
-          <button class="lb-tab" onclick="Leaderboard.show('level')">Level</button>
+          <button class="lb-tab active" onclick="Leaderboard.show('weekly')">Weekly Money <span class="edu-tip" data-tip="Ranked by current cash balance. Resets weekly when the admin triggers a reset.">ⓘ</span></button>
+          <button class="lb-tab" onclick="Leaderboard.show('alltime')">All-Time <span class="edu-tip" data-tip="Ranked by the highest cash balance ever reached. Even if your money drops, your record stays.">ⓘ</span></button>
+          <button class="lb-tab" onclick="Leaderboard.show('level')">Level <span class="edu-tip tip-left" data-tip="Ranked by XP. Earn XP from profitable trades and lobby matches. Higher levels unlock Battle Pass cosmetics.">ⓘ</span></button>
         </div>
         <div class="leaderboard-list" id="leaderboard-list">
           <p class="placeholder-text">Loading rankings...</p>
@@ -537,6 +546,28 @@
 
       <!-- ADMIN PANEL PAGE (hidden unless admin) -->
       <div id="page-admin" class="page">
+
+      <!-- GLOSSARY / LEARN PAGE -->
+      <div id="page-glossary" class="page">
+        <div class="glossary-page">
+          <div class="glossary-header">
+            <h2>📖 Trading Glossary</h2>
+            <p class="text-muted">Learn real stock market terms used throughout BullRun</p>
+          </div>
+          <div class="glossary-search">
+            <input type="text" id="glossary-search-input" placeholder="Search terms..." oninput="Glossary.filter()">
+          </div>
+          <div class="glossary-categories" id="glossary-categories">
+            <button class="glos-cat active" data-cat="all" onclick="Glossary.setCategory('all')">All</button>
+            <button class="glos-cat" data-cat="basics" onclick="Glossary.setCategory('basics')">Basics</button>
+            <button class="glos-cat" data-cat="trading" onclick="Glossary.setCategory('trading')">Trading</button>
+            <button class="glos-cat" data-cat="analysis" onclick="Glossary.setCategory('analysis')">Analysis</button>
+            <button class="glos-cat" data-cat="market" onclick="Glossary.setCategory('market')">Market</button>
+            <button class="glos-cat" data-cat="slang" onclick="Glossary.setCategory('slang')">Slang</button>
+          </div>
+          <div class="glossary-list" id="glossary-list"></div>
+        </div>
+      </div>
         <div class="admin-page">
           <div class="admin-header">
             <h2>⚡ Admin Panel</h2>
