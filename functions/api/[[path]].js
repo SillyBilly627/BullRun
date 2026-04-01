@@ -329,14 +329,14 @@ async function tickStockPrices(env) {
     `).bind(stock.id, newPrice, open, Math.round(high * 100) / 100, Math.round(low * 100) / 100, close).run();
   }
 
-  // Periodic cleanup: delete stock_history older than 24 hours
+  // Periodic cleanup: delete stock_history older than 4 hours
   // Only runs ~every 20 ticks (10 minutes) to avoid overhead
   const cleanupKey = await env.SESSION_STORE.get('last_history_cleanup');
   const cleanupInterval = 600 * 1000; // 10 minutes
   if (!cleanupKey || (now - parseInt(cleanupKey)) > cleanupInterval) {
     await env.SESSION_STORE.put('last_history_cleanup', now.toString());
     await env.DB.prepare(
-      "DELETE FROM stock_history WHERE timestamp < datetime('now', '-24 hours')"
+      "DELETE FROM stock_history WHERE timestamp < datetime('now', '-4 hours')"
     ).run();
   }
 
@@ -798,7 +798,7 @@ export async function onRequest(context) {
 
       // Get price history filtered by time range (in minutes)
       const minutes = parseInt(url.searchParams.get('minutes') || '60');
-      const clampedMinutes = Math.min(Math.max(minutes, 5), 1440); // 5 min to 24 hours
+      const clampedMinutes = Math.min(Math.max(minutes, 5), 240); // 5 min to 4 hours
       const history = await env.DB.prepare(
         `SELECT price, open_price, high_price, low_price, close_price, volume, timestamp
          FROM stock_history
