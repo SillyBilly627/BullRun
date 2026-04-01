@@ -219,7 +219,7 @@ Users, stocks (70 total: 32 real + 38 fictional), portfolios, transactions, stoc
 - [x] **Chart history range** — stock detail modal has time-based range selector (30m, 1h, 6h, 12h, 24h), backend filters by timestamp with `?minutes=` parameter (clamped 5-1440)
 - [x] **Instant modal loading** — stock detail modal opens instantly with cached price data, chart and holdings load asynchronously in the background
 - [x] **Educational tips** — 12 rotating stock market tips shown contextually
-- [ ] **Weekly reset** — scheduled job to reset all player money to $10,000 and stock prices to base (needs Cloudflare Cron Trigger or manual admin action)
+- [x] **Weekly reset** — manual admin button in the admin panel resets all money, portfolios, stock prices, and history (Cloudflare Cron Trigger not needed)
 
 ### Phase 3 — Competitive & Social ✅ COMPLETE
 
