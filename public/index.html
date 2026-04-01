@@ -254,10 +254,13 @@
 
         <!-- Watchlist Panel -->
         <div class="watchlist-container" id="watchlist-container">
-          <h3 class="watchlist-title">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            Watchlist
-          </h3>
+          <div class="watchlist-header">
+            <h3 class="watchlist-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              Watchlist
+            </h3>
+            <button class="chart-toggle-btn" id="wl-chart-toggle" onclick="Market.toggleWlChartType()" style="font-size:0.72rem;">📈 Line</button>
+          </div>
           <div class="watchlist-items" id="watchlist-panel">
             <p class="placeholder-text" style="padding:0.75rem;">Pin stocks with the ★ icon to track them here</p>
           </div>

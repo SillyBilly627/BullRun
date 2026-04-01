@@ -441,47 +441,76 @@ input, button, select { font-family: inherit; }
   border-radius: var(--radius-md); margin-bottom: 1rem;
   overflow: hidden;
 }
+.watchlist-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
 .watchlist-title {
   display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.6rem 1rem; font-size: 0.75rem; font-weight: 600;
+  font-size: 0.75rem; font-weight: 600;
   color: var(--amber); text-transform: uppercase; letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--border); margin: 0;
+  margin: 0;
 }
-.watchlist-items { display: flex; overflow-x: auto; gap: 0; }
-.watchlist-item {
+.watchlist-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0; padding: 0;
+}
+.wl-card {
   display: flex; flex-direction: column;
-  padding: 0.6rem 1rem; cursor: pointer;
+  padding: 0.75rem 1rem; cursor: pointer;
+  border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
-  white-space: nowrap; transition: background 0.15s;
-  min-width: 150px;
+  transition: background 0.15s;
 }
-.watchlist-item:hover { background: var(--bg-card-hover); }
-.wl-top {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.5rem; margin-bottom: 0.2rem;
+.wl-card:hover { background: var(--bg-card-hover); }
+.wl-card-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 0.4rem;
 }
-.wl-bottom {
+.wl-card-left { display: flex; flex-direction: column; gap: 0.1rem; }
+.wl-card-symbol {
+  font-family: var(--font-mono); font-weight: 700;
+  font-size: 0.95rem; color: var(--text-primary);
+}
+.wl-card-name {
+  font-size: 0.68rem; color: var(--text-muted);
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wl-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem; }
+.wl-card-price {
+  font-family: var(--font-mono); font-size: 0.88rem;
+  font-weight: 600; color: var(--text-primary);
+}
+.wl-card-change {
+  font-family: var(--font-mono); font-size: 0.7rem;
+  font-weight: 500; padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+.wl-card-change.up { color: var(--gain); background: var(--gain-bg); }
+.wl-card-change.down { color: var(--loss); background: var(--loss-bg); }
+.wl-card-change.flat { color: var(--text-muted); }
+.wl-chart-wrap {
+  width: 100%; height: 120px;
+  margin: 0.25rem 0;
+}
+.wl-chart-canvas { display: block; width: 100%; height: 100%; }
+.wl-card-footer {
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.5rem; margin-top: 0.2rem;
 }
-.wl-sparkline { display: block; width: 100%; height: 36px; }
-.wl-symbol {
-  font-family: var(--font-mono); font-weight: 600;
-  font-size: 0.82rem; color: var(--text-primary);
+.wl-card-sector {
+  font-size: 0.65rem; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.03em; font-weight: 500;
 }
-.wl-price {
-  font-family: var(--font-mono); font-size: 0.78rem;
-  color: var(--text-secondary);
+.wl-card-week { font-family: var(--font-mono); font-size: 0.68rem; }
+.wl-unpin-btn {
+  background: none; border: none; color: var(--amber);
+  cursor: pointer; padding: 0.2rem; border-radius: 4px;
+  opacity: 0.5; transition: opacity 0.15s;
 }
-.wl-change {
-  font-family: var(--font-mono); font-size: 0.68rem;
-  font-weight: 500; padding: 0.1rem 0.35rem;
-  border-radius: 3px;
-}
-.wl-change.up { color: var(--gain); background: var(--gain-bg); }
-.wl-change.down { color: var(--loss); background: var(--loss-bg); }
-.wl-change.flat { color: var(--text-muted); }
-.wl-week { font-family: var(--font-mono); }
+.wl-unpin-btn:hover { opacity: 1; }
 
 /* Pin button on stock rows */
 .pin-btn {

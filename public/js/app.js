@@ -348,46 +348,204 @@ const Market = (() => {
   }
 
   // --- WATCHLIST ---
+  let wlChartType = 'line'; // watchlist chart type: 'line' or 'candle'
+  let cachedWatchlist = []; // store for re-rendering on toggle
+
   function renderWatchlist(watchlist) {
     const el = document.getElementById('watchlist-panel');
     const container = document.getElementById('watchlist-container');
     if (!el) return;
+    cachedWatchlist = watchlist;
+
     if (watchlist.length === 0) {
       if (container) container.style.display = 'none';
       el.innerHTML = '<p class="placeholder-text" style="padding:0.75rem;">Pin stocks with the ★ icon to track them here</p>';
       return;
     }
     if (container) container.style.display = 'block';
+
+    // Update toggle button state
+    const toggleBtn = document.getElementById('wl-chart-toggle');
+    if (toggleBtn) toggleBtn.textContent = wlChartType === 'candle' ? '📊 Candles' : '📈 Line';
+
     el.innerHTML = watchlist.map((s, idx) => {
       const pct = s.previous_price > 0 ? ((s.current_price - s.previous_price) / s.previous_price * 100) : 0;
       const dir = changeClass(s.current_price, s.previous_price);
       const weekPct = s.base_price > 0 ? ((s.current_price - s.base_price) / s.base_price * 100) : 0;
       return `
-        <div class="watchlist-item" onclick="Market.openDetail(${s.id})">
-          <div class="wl-top">
-            <span class="wl-symbol">${s.symbol}</span>
-            <span class="wl-change ${dir}">${formatPercent(pct)}</span>
+        <div class="wl-card" onclick="Market.openDetail(${s.id})">
+          <div class="wl-card-header">
+            <div class="wl-card-left">
+              <span class="wl-card-symbol">${s.symbol}</span>
+              <span class="wl-card-name">${s.name}</span>
+            </div>
+            <div class="wl-card-right">
+              <span class="wl-card-price">${formatMoney(s.current_price)}</span>
+              <span class="wl-card-change ${dir}">${formatPercent(pct)}</span>
+            </div>
           </div>
-          <canvas class="wl-sparkline" id="wl-spark-${idx}" width="120" height="36"></canvas>
-          <div class="wl-bottom">
-            <span class="wl-price">${formatMoney(s.current_price)}</span>
-            <span class="wl-week ${weekPct >= 0 ? 'text-gain' : 'text-loss'}" style="font-size:0.6rem;">wk ${formatPercent(weekPct)}</span>
+          <div class="wl-chart-wrap">
+            <canvas class="wl-chart-canvas" id="wl-chart-${idx}"></canvas>
+          </div>
+          <div class="wl-card-footer">
+            <span class="wl-card-sector">${s.sector || 'General'}</span>
+            <span class="wl-card-week ${weekPct >= 0 ? 'text-gain' : 'text-loss'}">week ${formatPercent(weekPct)}</span>
+            <button class="wl-unpin-btn" onclick="event.stopPropagation(); Market.togglePin(${s.id})" title="Unpin">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </button>
           </div>
         </div>
       `;
     }).join('');
 
-    // Draw mini sparklines after HTML is rendered
+    // Draw charts after HTML renders
     requestAnimationFrame(() => {
       watchlist.forEach((s, idx) => {
-        if (s.sparkline && s.sparkline.length > 1) {
-          drawSparkline(`wl-spark-${idx}`, s.sparkline);
+        if (wlChartType === 'candle' && s.history && s.history.length > 1) {
+          drawWlCandleChart(`wl-chart-${idx}`, s.history);
+        } else if (s.sparkline && s.sparkline.length > 1) {
+          drawWlLineChart(`wl-chart-${idx}`, s.sparkline);
         }
       });
     });
   }
 
-  // Draw a tiny sparkline chart on a small canvas
+  // Toggle watchlist chart type
+  function toggleWlChartType() {
+    wlChartType = wlChartType === 'line' ? 'candle' : 'line';
+    renderWatchlist(cachedWatchlist);
+  }
+
+  // Watchlist line chart (bigger version of sparkline)
+  function drawWlLineChart(canvasId, data) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || data.length < 2) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    const pad = { top: 8, right: 8, bottom: 8, left: 44 };
+    const w = canvas.width - pad.left - pad.right;
+    const h = canvas.height - pad.top - pad.bottom;
+
+    const min = Math.min(...data) * 0.998;
+    const max = Math.max(...data) * 1.002;
+    const range = max - min || 1;
+
+    const isUp = data[data.length - 1] >= data[0];
+    const lineColor = isUp ? '#22c55e' : '#ef4444';
+    const fillColor = isUp ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+
+    // Y-axis labels (3 ticks)
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 2; i++) {
+      const val = min + (range * i / 2);
+      const y = pad.top + h - (h * i / 2);
+      ctx.fillText('$' + val.toFixed(val >= 100 ? 0 : 2), pad.left - 4, y + 3);
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(canvas.width - pad.right, y); ctx.stroke();
+    }
+
+    const points = data.map((val, i) => ({
+      x: pad.left + (i / (data.length - 1)) * w,
+      y: pad.top + h - ((val - min) / range) * h,
+    }));
+
+    // Fill
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, pad.top + h);
+    points.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(points[points.length - 1].x, pad.top + h);
+    ctx.closePath();
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // End dot
+    const last = points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+  }
+
+  // Watchlist candlestick chart
+  function drawWlCandleChart(canvasId, history) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || history.length < 2) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    const pad = { top: 8, right: 8, bottom: 8, left: 44 };
+    const w = canvas.width - pad.left - pad.right;
+    const h = canvas.height - pad.top - pad.bottom;
+
+    let allMin = Infinity, allMax = -Infinity;
+    history.forEach(c => {
+      allMin = Math.min(allMin, c.low_price || c.price);
+      allMax = Math.max(allMax, c.high_price || c.price);
+    });
+    allMin *= 0.998;
+    allMax *= 1.002;
+    const range = allMax - allMin || 1;
+
+    const priceToY = (price) => pad.top + h - ((price - allMin) / range) * h;
+
+    // Y-axis labels (3 ticks)
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 2; i++) {
+      const val = allMin + (range * i / 2);
+      const y = pad.top + h - (h * i / 2);
+      ctx.fillText('$' + val.toFixed(val >= 100 ? 0 : 2), pad.left - 4, y + 3);
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(canvas.width - pad.right, y); ctx.stroke();
+    }
+
+    // Candles
+    const candleSpacing = w / history.length;
+    const candleWidth = Math.max(2, Math.min(8, candleSpacing * 0.6));
+
+    history.forEach((candle, i) => {
+      const open = candle.open_price || candle.price;
+      const close = candle.close_price || candle.price;
+      const high = candle.high_price || Math.max(open, close);
+      const low = candle.low_price || Math.min(open, close);
+      const isGreen = close >= open;
+      const color = isGreen ? '#22c55e' : '#ef4444';
+      const x = pad.left + (i + 0.5) * candleSpacing;
+
+      // Wick
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, priceToY(high));
+      ctx.lineTo(x, priceToY(low));
+      ctx.stroke();
+
+      // Body
+      const bodyTop = Math.min(priceToY(open), priceToY(close));
+      const bodyHeight = Math.max(1, Math.abs(priceToY(open) - priceToY(close)));
+      ctx.fillStyle = color;
+      ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+    });
+  }
+
+  // Draw a tiny sparkline chart on a small canvas (kept for fallback)
   function drawSparkline(canvasId, data) {
     const canvas = document.getElementById(canvasId);
     if (!canvas || data.length < 2) return;
@@ -826,7 +984,7 @@ const Market = (() => {
     });
   }
 
-  return { load, filterStocks, openDetail, closeModal, updateTradeTotal, executeTrade, togglePin, setChartType, setHistoryRange, startPolling, stopPolling, drawChart, drawLineChart, drawCandlestickChart };
+  return { load, filterStocks, openDetail, closeModal, updateTradeTotal, executeTrade, togglePin, setChartType, setHistoryRange, startPolling, stopPolling, drawChart, drawLineChart, drawCandlestickChart, toggleWlChartType };
 })();
 
 // ============================================================

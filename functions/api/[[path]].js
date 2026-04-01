@@ -1001,14 +1001,15 @@ export async function onRequest(context) {
         ORDER BY s.symbol
       `).bind(user.id).all();
 
-      // Fetch mini price history (last 20 points) for each watchlist stock
+      // Fetch price history (last 60 points with OHLC) for each watchlist stock
       const withSparklines = await Promise.all(watchlist.results.map(async (stock) => {
         const hist = await env.DB.prepare(
-          'SELECT close_price FROM stock_history WHERE stock_id = ? ORDER BY timestamp DESC LIMIT 20'
+          'SELECT price, open_price, high_price, low_price, close_price, timestamp FROM stock_history WHERE stock_id = ? ORDER BY timestamp DESC LIMIT 60'
         ).bind(stock.id).all();
         return {
           ...stock,
-          sparkline: hist.results.map(h => h.close_price).reverse()
+          sparkline: hist.results.map(h => h.close_price || h.price).reverse(),
+          history: hist.results.reverse()
         };
       }));
 
