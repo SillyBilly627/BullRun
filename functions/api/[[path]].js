@@ -797,17 +797,20 @@ export async function onRequest(context) {
       if (!stock) return jsonResponse({ error: 'Stock not found' }, 404);
 
       // Get price history filtered by time range (in minutes)
+      // Instead of timestamp comparison (clock sync issues), use tick count:
+      // 1 tick = 30 seconds, so minutes × 2 = number of ticks
       const minutes = parseInt(url.searchParams.get('minutes') || '60');
       const clampedMinutes = Math.min(Math.max(minutes, 5), 240); // 5 min to 4 hours
-      // Compute cutoff timestamp in JS to avoid SQLite string concatenation issues
-      const cutoffMs = Date.now() - clampedMinutes * 60 * 1000;
-      const cutoff = new Date(cutoffMs).toISOString().replace('T', ' ').slice(0, 19);
+      const tickCount = clampedMinutes * 2; // 2 ticks per minute (30-sec intervals)
       const history = await env.DB.prepare(
         `SELECT price, open_price, high_price, low_price, close_price, volume, timestamp
          FROM stock_history
-         WHERE stock_id = ? AND timestamp >= ?
-         ORDER BY timestamp ASC`
-      ).bind(stockId, cutoff).all();
+         WHERE stock_id = ?
+         ORDER BY timestamp DESC
+         LIMIT ?`
+      ).bind(stockId, tickCount).all();
+      // Reverse so oldest is first (chart draws left to right)
+      history.results.reverse();
 
       // Get user's holdings for this stock
       const holding = await env.DB.prepare(
