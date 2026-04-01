@@ -799,12 +799,15 @@ export async function onRequest(context) {
       // Get price history filtered by time range (in minutes)
       const minutes = parseInt(url.searchParams.get('minutes') || '60');
       const clampedMinutes = Math.min(Math.max(minutes, 5), 240); // 5 min to 4 hours
+      // Compute cutoff timestamp in JS to avoid SQLite string concatenation issues
+      const cutoffMs = Date.now() - clampedMinutes * 60 * 1000;
+      const cutoff = new Date(cutoffMs).toISOString().replace('T', ' ').slice(0, 19);
       const history = await env.DB.prepare(
         `SELECT price, open_price, high_price, low_price, close_price, volume, timestamp
          FROM stock_history
-         WHERE stock_id = ? AND timestamp >= datetime('now', '-' || ? || ' minutes')
+         WHERE stock_id = ? AND timestamp >= ?
          ORDER BY timestamp ASC`
-      ).bind(stockId, clampedMinutes).all();
+      ).bind(stockId, cutoff).all();
 
       // Get user's holdings for this stock
       const holding = await env.DB.prepare(
