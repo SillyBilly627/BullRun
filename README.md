@@ -50,47 +50,47 @@ A multiplayer stock market simulator built as a school project. Players trade si
 
 ---
 
-## Local Testing (Step by Step)
+## Local Testing
 
 ### What You Need
 
 - **Node.js** (LTS version) — download from [nodejs.org](https://nodejs.org)
 - **Git** — to clone the repo
 
-### Step 1: Clone and install
+### Quick Start (Double-Click Launchers)
+
+After cloning the repo, you can start the game by double-clicking a file — no terminal needed:
+
+| File | What it does |
+|------|-------------|
+| `Start Server (Mac).command` | Starts the server on Mac. Auto-installs dependencies and sets up the database on first run. |
+| `Start Server (Windows).bat` | Same thing for Windows. |
+| `Fresh Start (Mac).command` | **Wipes all data** (accounts, trades, history) and starts fresh on Mac. |
+| `Fresh Start (Windows).bat` | Same thing for Windows. |
+
+The server runs at **http://localhost:8788** — open that in your browser to play.
+
+> **Mac users:** If macOS blocks the `.command` file, right-click it → Open → Open. You only need to do this once.
+
+> **School network?** If you get SSL errors, open a terminal in the BullRun folder and run `npm config set strict-ssl false` before using the launchers.
+
+### Manual Setup (Terminal)
+
+If you prefer using the terminal:
 
 ```bash
 git clone https://github.com/SillyBilly627/BullRun.git
 cd BullRun
 npm install
-```
-
-> **School network?** If you get SSL errors during install, run this first:
-> ```bash
-> npm config set strict-ssl false
-> ```
-
-### Step 2: Set up the local database
-
-```bash
 npm run setup
-```
-
-This automatically creates the SQLite database and runs all migration files (tables, stocks, cosmetics). It takes about 10 seconds.
-
-> **What this does:** The setup script starts the dev server briefly to create the database file, finds its exact path, runs all SQL migrations into it, then stops the server. This avoids a known path mismatch issue between Wrangler's migration tool and dev server.
-
-### Step 3: Start the game
-
-```bash
 npm run dev
 ```
 
-Open your browser to **http://localhost:8788** — you'll see the login screen. Create an account and start trading!
+Then open **http://localhost:8788** in your browser.
 
 ### Resetting your local database
 
-If anything goes wrong or you want a fresh start:
+If anything goes wrong or you want a fresh start, use the "Fresh Start" launcher or run:
 
 ```bash
 rm -rf .wrangler
@@ -220,6 +220,10 @@ If new migration files were added, run those too (Step 5 commands for the new fi
 
 ```
 bullrun/
+├── Start Server (Mac).command  # Double-click to start (Mac)
+├── Start Server (Windows).bat  # Double-click to start (Windows)
+├── Fresh Start (Mac).command   # Wipe data + start fresh (Mac)
+├── Fresh Start (Windows).bat   # Wipe data + start fresh (Windows)
 ├── package.json                # Scripts: setup, dev, deploy
 ├── wrangler.toml               # Cloudflare config (D1 + KV bindings)
 ├── setup.sh                    # Local database setup script
