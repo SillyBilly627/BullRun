@@ -39,7 +39,7 @@ function generateSessionToken() {
 }
 
 // ----------------------------------------------------------
-// HELPER: Build JSON response with CORS headers
+// HELPER: Build JSON response with CORS + security headers
 // ----------------------------------------------------------
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -49,8 +49,40 @@ function jsonResponse(data, status = 200) {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
     },
   });
+}
+
+// ----------------------------------------------------------
+// HELPER: Rate Limiter (uses KV store)
+// ----------------------------------------------------------
+// Returns true if request is allowed, false if rate limited.
+// Uses a sliding window approach with KV TTL.
+// ----------------------------------------------------------
+async function checkRateLimit(env, identifier, maxRequests, windowSeconds) {
+  const key = `rl:${identifier}`;
+  try {
+    const data = await env.SESSION_STORE.get(key);
+    if (!data) {
+      await env.SESSION_STORE.put(key, '1', { expirationTtl: windowSeconds });
+      return true;
+    }
+    const count = parseInt(data);
+    if (count >= maxRequests) return false;
+    await env.SESSION_STORE.put(key, (count + 1).toString(), { expirationTtl: windowSeconds });
+    return true;
+  } catch {
+    return true; // Fail open — don't block requests if KV has issues
+  }
+}
+
+// Helper: get client IP from request
+function getClientIP(request) {
+  return request.headers.get('CF-Connecting-IP')
+    || request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+    || 'unknown';
 }
 
 // ----------------------------------------------------------
@@ -75,6 +107,7 @@ async function getSessionUser(request, env) {
 // ----------------------------------------------------------
 function validatePassword(password) {
   if (password.length < 4) return 'Password must be at least 4 characters';
+  if (password.length > 128) return 'Password must be 128 characters or less';
   if (!/[a-z]/i.test(password)) return 'Password must include at least one letter';
   if (!/[0-9]/.test(password)) return 'Password must include at least one number';
   if (!/[A-Z]/.test(password)) return 'Password must include at least one capital letter';
@@ -82,10 +115,13 @@ function validatePassword(password) {
 }
 
 // ----------------------------------------------------------
-// HELPER: Sanitize user input (prevent XSS)
+// HELPER: Sanitize user input (prevent XSS + strip control chars)
 // ----------------------------------------------------------
 function sanitize(str) {
   if (typeof str !== 'string') return '';
+  // Strip control characters (except newline/tab for chat)
+  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  // Escape HTML special characters
   return str.replace(/[<>"'&]/g, (c) => {
     const map = { '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;', '&': '&amp;' };
     return map[c];
@@ -579,11 +615,25 @@ export async function onRequest(context) {
 
   try {
     // ======================================
+    // BODY SIZE GUARD — reject huge payloads
+    // ======================================
+    const contentLength = parseInt(request.headers.get('Content-Length') || '0');
+    if (contentLength > 50000) { // 50KB max
+      return jsonResponse({ error: 'Request too large' }, 413);
+    }
+
+    // ======================================
     // AUTH ROUTES
     // ======================================
 
     // --- SIGNUP ---
     if (path === 'auth/signup' && method === 'POST') {
+      // Rate limit: 5 signups per minute per IP
+      const ip = getClientIP(request);
+      if (!await checkRateLimit(env, `signup:${ip}`, 5, 60)) {
+        return jsonResponse({ error: 'Too many signup attempts. Try again in a minute.' }, 429);
+      }
+
       const body = await request.json();
       const username = sanitize(body.username || '');
       const password = body.password || '';
@@ -624,6 +674,12 @@ export async function onRequest(context) {
 
     // --- LOGIN ---
     if (path === 'auth/login' && method === 'POST') {
+      // Rate limit: 10 login attempts per minute per IP
+      const ip = getClientIP(request);
+      if (!await checkRateLimit(env, `login:${ip}`, 10, 60)) {
+        return jsonResponse({ error: 'Too many login attempts. Try again in a minute.' }, 429);
+      }
+
       const body = await request.json();
       const username = sanitize(body.username || '');
       const password = body.password || '';
@@ -756,12 +812,20 @@ export async function onRequest(context) {
       const user = await getSessionUser(request, env);
       if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
 
+      // Rate limit: 30 trades per minute per user
+      if (!await checkRateLimit(env, `trade:${user.id}`, 30, 60)) {
+        return jsonResponse({ error: 'Too many trades. Slow down and think before you trade!' }, 429);
+      }
+
       const body = await request.json();
       const stockId = parseInt(body.stockId);
       const shares = parseInt(body.shares);
 
       if (!stockId || !shares || shares < 1) {
         return jsonResponse({ error: 'Invalid stock or share amount' }, 400);
+      }
+      if (shares > 10000) {
+        return jsonResponse({ error: 'Maximum 10,000 shares per trade' }, 400);
       }
 
       // Get stock
@@ -823,12 +887,20 @@ export async function onRequest(context) {
       const user = await getSessionUser(request, env);
       if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
 
+      // Rate limit: shares same pool as buy (30/min)
+      if (!await checkRateLimit(env, `trade:${user.id}`, 30, 60)) {
+        return jsonResponse({ error: 'Too many trades. Slow down and think before you trade!' }, 429);
+      }
+
       const body = await request.json();
       const stockId = parseInt(body.stockId);
       const shares = parseInt(body.shares);
 
       if (!stockId || !shares || shares < 1) {
         return jsonResponse({ error: 'Invalid stock or share amount' }, 400);
+      }
+      if (shares > 10000) {
+        return jsonResponse({ error: 'Maximum 10,000 shares per trade' }, 400);
       }
 
       // Check holdings
@@ -1173,6 +1245,11 @@ export async function onRequest(context) {
       const user = await getSessionUser(request, env);
       if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
 
+      // Rate limit: 5 lobby creates per 5 minutes
+      if (!await checkRateLimit(env, `lobbyc:${user.id}`, 5, 300)) {
+        return jsonResponse({ error: 'You\'re creating lobbies too fast. Wait a few minutes.' }, 429);
+      }
+
       // Check if user is already in a lobby
       const existing = await env.DB.prepare(`
         SELECT l.id FROM lobbies l
@@ -1452,6 +1529,9 @@ export async function onRequest(context) {
       if (!lobbyId || !stockId || !shares || shares < 1) {
         return jsonResponse({ error: 'Invalid request' }, 400);
       }
+      if (shares > 10000) {
+        return jsonResponse({ error: 'Maximum 10,000 shares per trade' }, 400);
+      }
 
       // Verify player is in this active lobby
       const player = await env.DB.prepare(
@@ -1528,6 +1608,9 @@ export async function onRequest(context) {
 
       if (!lobbyId || !stockId || !shares || shares < 1) {
         return jsonResponse({ error: 'Invalid request' }, 400);
+      }
+      if (shares > 10000) {
+        return jsonResponse({ error: 'Maximum 10,000 shares per trade' }, 400);
       }
 
       const player = await env.DB.prepare(
@@ -1783,6 +1866,11 @@ export async function onRequest(context) {
       const user = await getSessionUser(request, env);
       if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
 
+      // Rate limit: 15 messages per minute per user
+      if (!await checkRateLimit(env, `chat:${user.id}`, 15, 60)) {
+        return jsonResponse({ error: 'Slow down! You can send 15 messages per minute.' }, 429);
+      }
+
       // Check if chat is enabled
       const config = await env.DB.prepare("SELECT value FROM game_config WHERE key = 'chat_enabled'").first();
       if (config && config.value !== '1') {
@@ -1817,6 +1905,11 @@ export async function onRequest(context) {
     if (path === 'admin/verify' && method === 'POST') {
       const user = await getSessionUser(request, env);
       if (!user) return jsonResponse({ error: 'Not authenticated' }, 401);
+
+      // Rate limit: 5 attempts per minute per user (prevent brute force)
+      if (!await checkRateLimit(env, `adminpw:${user.id}`, 5, 60)) {
+        return jsonResponse({ error: 'Too many attempts. Try again in a minute.' }, 429);
+      }
 
       const body = await request.json();
       const password = body.password || '';
