@@ -2362,10 +2362,62 @@ const Glossary = (() => {
 })();
 
 // ============================================================
-// TOOLTIP — Hover tooltips for educational info icons
+// TOOLTIP — JS-positioned tooltips that can't be clipped
 // ============================================================
-// Usage in HTML: <span class="edu-tip" data-tip="Explanation here">ⓘ</span>
-// The CSS handles the hover popup styling.
+// Edu-tip icons (ⓘ) with data-tip attribute show a floating
+// popup on hover. The popup is appended to <body> with
+// position:fixed so overflow:hidden on parents can't clip it.
+// ============================================================
+(() => {
+  let popup = null;
+
+  function getPopup() {
+    if (!popup) {
+      popup = document.createElement('div');
+      popup.className = 'edu-tooltip-popup';
+      document.body.appendChild(popup);
+    }
+    return popup;
+  }
+
+  document.addEventListener('mouseover', (e) => {
+    const tip = e.target.closest('.edu-tip');
+    if (!tip || !tip.dataset.tip) return;
+
+    const p = getPopup();
+    p.textContent = tip.dataset.tip;
+    p.classList.add('visible');
+
+    // Position below the icon
+    const rect = tip.getBoundingClientRect();
+    let left = rect.left + rect.width / 2;
+    let top = rect.bottom + 8;
+
+    // Measure popup size
+    requestAnimationFrame(() => {
+      const pw = p.offsetWidth;
+      const ph = p.offsetHeight;
+
+      // Keep within viewport horizontally
+      if (left - pw / 2 < 8) left = 8 + pw / 2;
+      if (left + pw / 2 > window.innerWidth - 8) left = window.innerWidth - 8 - pw / 2;
+
+      // If it would go below viewport, show above instead
+      if (top + ph > window.innerHeight - 8) {
+        top = rect.top - ph - 8;
+      }
+
+      p.style.left = (left - pw / 2) + 'px';
+      p.style.top = top + 'px';
+    });
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    const tip = e.target.closest('.edu-tip');
+    if (!tip) return;
+    if (popup) popup.classList.remove('visible');
+  });
+})();
 
 // ============================================================
 // ADMIN — Admin Panel Module

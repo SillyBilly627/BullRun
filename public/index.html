@@ -185,7 +185,7 @@
                 <span class="stat-value" id="home-level">1</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">XP <span class="edu-tip tip-left" data-tip="Earn XP from profitable trades (10 base + 5 per $100 profit) and lobby matches (25 participation + up to 100 for winning).">ⓘ</span></span>
+                <span class="stat-label">XP <span class="edu-tip" data-tip="Earn XP from profitable trades (10 base + 5 per $100 profit) and lobby matches (25 participation + up to 100 for winning).">ⓘ</span></span>
                 <span class="stat-value" id="home-xp">0</span>
               </div>
             </div>
@@ -302,7 +302,7 @@
               <span class="summary-value" id="portfolio-networth">$0.00</span>
             </div>
             <div class="summary-card">
-              <span class="summary-label">Profit/Loss <span class="edu-tip tip-left" data-tip="How much you've gained or lost compared to what you paid. Green = profit, Red = loss. This is 'unrealised' until you sell.">ⓘ</span></span>
+              <span class="summary-label">Profit/Loss <span class="edu-tip" data-tip="How much you've gained or lost compared to what you paid. Green = profit, Red = loss. This is 'unrealised' until you sell.">ⓘ</span></span>
               <span class="summary-value" id="portfolio-pnl">$0.00</span>
             </div>
           </div>
@@ -495,7 +495,7 @@
         <div class="leaderboard-tabs">
           <button class="lb-tab active" onclick="Leaderboard.show('weekly')">Weekly Money <span class="edu-tip" data-tip="Ranked by current cash balance. Resets weekly when the admin triggers a reset.">ⓘ</span></button>
           <button class="lb-tab" onclick="Leaderboard.show('alltime')">All-Time <span class="edu-tip" data-tip="Ranked by the highest cash balance ever reached. Even if your money drops, your record stays.">ⓘ</span></button>
-          <button class="lb-tab" onclick="Leaderboard.show('level')">Level <span class="edu-tip tip-left" data-tip="Ranked by XP. Earn XP from profitable trades and lobby matches. Higher levels unlock Battle Pass cosmetics.">ⓘ</span></button>
+          <button class="lb-tab" onclick="Leaderboard.show('level')">Level <span class="edu-tip" data-tip="Ranked by XP. Earn XP from profitable trades and lobby matches. Higher levels unlock Battle Pass cosmetics.">ⓘ</span></button>
         </div>
         <div class="leaderboard-list" id="leaderboard-list">
           <p class="placeholder-text">Loading rankings...</p>
@@ -544,9 +544,6 @@
         </div>
       </div>
 
-      <!-- ADMIN PANEL PAGE (hidden unless admin) -->
-      <div id="page-admin" class="page">
-
       <!-- GLOSSARY / LEARN PAGE -->
       <div id="page-glossary" class="page">
         <div class="glossary-page">
@@ -568,6 +565,9 @@
           <div class="glossary-list" id="glossary-list"></div>
         </div>
       </div>
+
+      <!-- ADMIN PANEL PAGE (hidden unless admin) -->
+      <div id="page-admin" class="page">
         <div class="admin-page">
           <div class="admin-header">
             <h2>⚡ Admin Panel</h2>
