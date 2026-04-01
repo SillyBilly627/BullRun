@@ -97,7 +97,7 @@ Phase 1 has been tested and confirmed working locally:
 | Route | Method | Auth | Description |
 |-------|--------|------|-------------|
 | `stocks/tick` | GET | Yes | Poll for price updates — triggers a tick if 30+ seconds have passed, returns all current prices |
-| `watchlist` | GET | Yes | Get user's pinned stocks with mini sparkline data (last 20 close prices per stock) |
+| `watchlist` | GET | Yes | Get user's pinned stocks with 60-point OHLC history for charts |
 | `watchlist/toggle` | POST | Yes | Add or remove a stock from watchlist (auto-detects) |
 
 **Added in Phase 3:**
@@ -150,7 +150,7 @@ Phase 1 has been tested and confirmed working locally:
 
 - **Auth screen** — login/signup with validation and Enter key support
 - **Home page** — welcome card, stats (net worth, cash, level, XP), quick action buttons, market movers (top 3 gainers + 3 losers), holdings summary
-- **Market page** — searchable stock list with live price updates (10s polling), LIVE indicator badge, watchlist panel with mini sparkline charts, pin/unpin stocks with star icons
+- **Market page** — searchable stock list with live price updates (10s polling), LIVE indicator badge, watchlist panel with large chart cards (line/candlestick toggle), pin/unpin stocks with star icons
 - **Stock detail modal** — instant-loading modal with stock info from cache, async chart loading, line/candlestick chart toggle, time-based range selector (30m/1h/6h/12h/24h), buy/sell forms, holdings info with P/L, educational tips
 - **Portfolio page** — summary cards (cash, holdings value, net worth, P/L) + individual holdings list with per-stock P/L
 - **Leaderboard page** — tabbed view (weekly/all-time/level), clickable rows to view profiles, highlights current user
@@ -199,7 +199,7 @@ Users, stocks (70 total: 32 real + 38 fictional), portfolios, transactions, stoc
 - [x] **Stock price engine** — random walk algorithm using `crypto.getRandomValues()`, incorporates buy_pressure from player activity, mean reversion toward base_price, occasional momentum spikes (10% chance of 2.5x moves)
 - [x] **Stock history recording** — saves OHLCV candles to stock_history table each tick
 - [x] **Candlestick chart toggle** — switch between line chart and candlestick chart in the stock detail modal
-- [x] **Stock pinning/watchlist** — pin/unpin stocks with star icon, watchlist panel at top of market page, mini sparkline charts on each pinned stock showing last 20 price ticks
+- [x] **Stock pinning/watchlist** — pin/unpin stocks with star icon, watchlist panel at top of market page with large chart cards (120px height), line/candlestick toggle button, 60-point OHLC history per stock, CSS grid layout with auto-fill columns
 - [x] **Auto-refresh** — polls `stocks/tick` endpoint every 10 seconds, updates prices in-place with flash animations
 - [x] **Lazy tick evaluation** — prices auto-update when any player fetches stock data (every 30 seconds)
 - [x] **Chart history range** — stock detail modal has time-based range selector (30m, 1h, 6h, 12h, 24h), backend filters by timestamp with `?minutes=` parameter (clamped 5-1440)
