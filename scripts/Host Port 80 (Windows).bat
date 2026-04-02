@@ -82,5 +82,5 @@ echo.
 echo   ----------------------------------------
 echo.
 
-call npx wrangler pages dev ./public --d1 DB --kv SESSION_STORE --port 80
+call npx wrangler pages dev ./public --d1 DB --kv SESSION_STORE --port 80 --ip 0.0.0.0
 pause
