@@ -5,7 +5,7 @@
 :: All player accounts, trades, and progress will be deleted.
 :: ============================================================
 
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 cls
 
 echo.

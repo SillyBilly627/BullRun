@@ -71,16 +71,20 @@ A multiplayer stock market simulator built as a school project. Players trade si
 
 ### Quick Start (Double-Click Launchers)
 
-After cloning the repo, you can start the game by double-clicking a file — no terminal needed:
+After cloning the repo, you can start the game by double-clicking a file in the `scripts/` folder — no terminal needed:
 
 | File | What it does |
 |------|-------------|
-| `Start Server (Mac).command` | Starts the server on Mac. Auto-installs dependencies and sets up the database on first run. |
-| `Start Server (Windows).bat` | Same thing for Windows. |
-| `Fresh Start (Mac).command` | **Wipes all data** (accounts, trades, history) and starts fresh on Mac. |
-| `Fresh Start (Windows).bat` | Same thing for Windows. |
+| `scripts/Start Server (Mac).command` | Starts the server on Mac. Auto-installs and sets up DB on first run. |
+| `scripts/Start Server (Windows).bat` | Same thing for Windows. |
+| `scripts/Fresh Start (Mac).command` | **Wipes all data** and starts fresh on Mac. |
+| `scripts/Fresh Start (Windows).bat` | Same thing for Windows. |
+| `scripts/Host Port 80 (Mac).command` | Starts on port 80 so other devices on your network can connect. Needs your Mac password. |
+| `scripts/Host Port 80 (Windows).bat` | Same for Windows. Right-click → Run as administrator. |
 
-The server runs at **http://localhost:8788** — open that in your browser to play.
+The server runs at **http://localhost:8788** (or **http://localhost** on port 80).
+
+For port 80, other devices on your network can connect using your computer's IP address (shown when the script starts).
 
 > **Mac users:** If macOS blocks the `.command` file, right-click it → Open → Open. You only need to do this once.
 
@@ -260,10 +264,13 @@ If BullRun is deployed to Cloudflare, tap the **⚙️ gear icon** in the top-ri
 
 ```
 bullrun/
-├── Start Server (Mac).command  # Double-click to start (Mac)
-├── Start Server (Windows).bat  # Double-click to start (Windows)
-├── Fresh Start (Mac).command   # Wipe data + start fresh (Mac)
-├── Fresh Start (Windows).bat   # Wipe data + start fresh (Windows)
+├── scripts/                    # Double-click launcher scripts
+│   ├── Start Server (Mac).command
+│   ├── Start Server (Windows).bat
+│   ├── Fresh Start (Mac).command
+│   ├── Fresh Start (Windows).bat
+│   ├── Host Port 80 (Mac).command
+│   └── Host Port 80 (Windows).bat
 ├── package.json                # Scripts: setup, dev, deploy
 ├── wrangler.toml               # Cloudflare config (D1 + KV bindings)
 ├── setup.sh                    # Local database setup script

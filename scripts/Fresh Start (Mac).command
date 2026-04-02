@@ -5,7 +5,7 @@
 # All player accounts, trades, and progress will be deleted.
 # ============================================================
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 clear
 
 echo ""

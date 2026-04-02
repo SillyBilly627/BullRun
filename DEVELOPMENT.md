@@ -40,10 +40,13 @@ bullrun/
 ├── wrangler.toml             # Cloudflare config (D1 + KV bindings)
 ├── README.md                 # User-facing setup + deployment instructions
 ├── DEVELOPMENT.md            # THIS FILE — project status for AI context
-├── Start Server (Mac).command    # Double-click launcher (Mac)
-├── Start Server (Windows).bat    # Double-click launcher (Windows)
-├── Fresh Start (Mac).command     # Wipe + restart launcher (Mac)
-├── Fresh Start (Windows).bat     # Wipe + restart launcher (Windows)
+├── scripts/                  # Double-click launcher scripts
+│   ├── Start Server (Mac).command
+│   ├── Start Server (Windows).bat
+│   ├── Fresh Start (Mac).command
+│   ├── Fresh Start (Windows).bat
+│   ├── Host Port 80 (Mac).command
+│   └── Host Port 80 (Windows).bat
 ├── BullRunApp/               # Native Swift wrapper app
 │   ├── BullRunApp.xcodeproj  # Open in Xcode to build macOS/iOS app
 │   └── BullRunApp/

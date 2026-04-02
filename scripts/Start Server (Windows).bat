@@ -4,7 +4,7 @@
 :: Double-click this file to start the game server.
 :: ============================================================
 
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 cls
 
 echo.
