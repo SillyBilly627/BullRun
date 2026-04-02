@@ -48,6 +48,10 @@ LOCAL_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/n
 echo "  ⚠️  Port 80 requires admin privileges."
 echo "  You'll be asked for your Mac password below."
 echo ""
+echo "  💡 If friends still can't connect:"
+echo "     System Settings → Network → Firewall → turn OFF"
+echo "     (or allow incoming connections when prompted)"
+echo ""
 echo "  🚀 Starting BullRun on port 80..."
 echo ""
 echo "  ┌──────────────────────────────────────┐"
@@ -63,4 +67,4 @@ echo "  │                                      │"
 echo "  └──────────────────────────────────────┘"
 echo ""
 
-sudo npx wrangler pages dev ./public --d1 DB --kv SESSION_STORE --port 80
+sudo npx wrangler pages dev ./public --d1 DB --kv SESSION_STORE --port 80 --ip 0.0.0.0
